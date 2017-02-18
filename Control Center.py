@@ -26,6 +26,8 @@ offGreen = '\001\033[36m\002' #light blue lol
 offBlue = '\001\033[38;5;148m\002'
 purple = '\001\033[0;35m\002'
 redX = "%s[x] %s" % (red, endC)
+endANSI = '\001\033[0m\002'
+red_minus = '\001\033[31m\002[-] %s' % endANSI
 greenCheck = "%s[+] %s" % (green, endC)
 bluePlus = "%s[*] %s" % (blue, endC)
 
@@ -578,7 +580,7 @@ def main():
                                 print "Could not find [%s]!" % local_file
                                 nextcmd = ''
                         except subprocess.CalledProcessError:
-                            print '%s%s%s' % (redX,red,"Canceled.")
+                            print '%s%s%s' % (red_minus,red,"Canceled.")
                             nextcmd = ''
                     if nextcmd.startswith("download"): #uploads to CWD.
                         if nextcmd == "download":
