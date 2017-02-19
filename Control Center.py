@@ -466,7 +466,7 @@ def main():
                         pass
 
                     if nextcmd == "removeserver_yes":
-                        verify = raw_input("Are you sure you want to delete [%s]?\n🦑  This cannot be un-done. (Y/n): " % computername)
+                        verify = raw_input("Are you sure you want to delete [%s]?\n🦑  This cannot be un-done. (y/N): " % computername)
                         if verify.lower() == "y":
                             print "%s%sRemote server is being removed and permanently deleted.%s" % (red, bold, endC)
                             nextcmd = "removeserver_yes"

