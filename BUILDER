@@ -8,7 +8,6 @@ bellaNoExt=${bella%.*}
 BuildsPath=Builds/$(date '+%m-%d@%H_%M')
 mkdir -p $BuildsPath
 rm Builds/latest
-ln -s $BuildsPath Builds/latest
 development=true
 cp $bella $BuildsPath/bella.py
 #cp Payloads/INSTALLER $BuildsPath/INSTALLER
@@ -63,6 +62,7 @@ fi
 
 echo -e '\033[92mPreparing Python code.\033[0m'
 mv $BuildsPath/bella.py $BuildsPath/$bellaNoExt
+ln -s $BuildsPath Builds/latest
 echo -e '\033[94mDone!\033[0m'
 
 
