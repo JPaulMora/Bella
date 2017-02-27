@@ -62,7 +62,6 @@ fi
 
 echo -e '\033[92mPreparing Python code.\033[0m'
 mv $BuildsPath/bella.py $BuildsPath/$bellaNoExt
-ln -s $BuildsPath Builds/latest
 echo -e '\033[94mDone!\033[0m'
 
 

