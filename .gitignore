@@ -2,3 +2,5 @@ Builds
 Logs
 *.crt
 *.key
+*.pem
+*.txt

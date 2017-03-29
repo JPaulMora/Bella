@@ -7,7 +7,7 @@ bella=$1
 bellaNoExt=${bella%.*}
 BuildsPath=Builds/$(date '+%m-%d@%H_%M')
 mkdir -p $BuildsPath
-development=true
+development=false
 cp $bella $BuildsPath/bella.py
 #cp Payloads/INSTALLER $BuildsPath/INSTALLER
 
